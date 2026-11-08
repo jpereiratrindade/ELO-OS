@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-IMAGES=${OUTPUT_DIR:-"$ROOT/output/pi5"}/images
+PROFILE=${PROFILE:-pi5}
+case "$PROFILE" in
+  pi5) artifacts=(sdcard.img) ;;
+  qemu-x86_64) artifacts=(bzImage rootfs.ext4) ;;
+  *) echo "Perfil desconhecido: $PROFILE" >&2; exit 2 ;;
+esac
+IMAGES=${OUTPUT_DIR:-"$ROOT/output/$PROFILE"}/images
 [[ -d "$IMAGES" ]] || { echo "Nenhuma imagem em $IMAGES" >&2; exit 1; }
 ls -lh "$IMAGES"
-if [[ -f "$IMAGES/sdcard.img" ]]; then
-  sha256sum "$IMAGES/sdcard.img"
-else
-  echo 'sdcard.img ausente' >&2
-  exit 1
-fi
+for artifact in "${artifacts[@]}"; do
+  [[ -f "$IMAGES/$artifact" ]] || { echo "$artifact ausente" >&2; exit 1; }
+  sha256sum "$IMAGES/$artifact"
+done

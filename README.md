@@ -33,7 +33,7 @@ Requisitos de host: Fedora/Linux com `git`, `make`, `gcc`, `g++`, `python3`, `rs
 ./scripts/inspect-image.sh
 ```
 
-O build pode baixar fontes e consumir recursos significativos. Não executamos o build nesta entrega.
+O build pode baixar fontes e consumir recursos significativos.
 
 O comando `./scripts/build.sh` cria `.cache/buildroot-2026.08.1/`, configura `output/pi5/` com `elo_pi5_defconfig` e chama o Buildroot. A saída esperada é `output/pi5/images/sdcard.img`, caso a versão/base/hardware suporte corretamente todas as dependências. **O script não grava mídia.**
 
@@ -44,6 +44,25 @@ A primeira imagem **não habilita o cliente Qt**: é uma base Pi 5 com identidad
 ### Segundo marco: P2, demo Qt
 
 Após validar o perfil P1, executar `./scripts/menuconfig.sh` e habilitar `elo-client (Qt Quick proof-of-concept)` em `External options`. O pacote depende de Qt 6 Base (GUI) e Qt Declarative; configurar DRM/Mesa/EGL e requisitos de Qt no Buildroot. Gravar nova defconfig somente após os testes de configuração. O demo ainda **não contém protocolo ELO, cache, eventos nem lógica de domínio**.
+
+### Desenvolvimento no Fedora com QEMU
+
+O perfil `qemu-x86_64` permite desenvolver boot, serviços, rede e comportamento do sistema sem gravar o microSD. Ele usa a identidade e o overlay ELO/OS da base P1, com identificação própria de plataforma. É uma compilação x86_64 separada: não executa a `sdcard.img` ARM64 nem valida firmware, drivers, GPU ou desempenho do Raspberry Pi 5.
+
+```bash
+# Se QEMU ainda não estiver instalado:
+sudo dnf install qemu-system-x86-core
+
+PROFILE=qemu-x86_64 ./scripts/build.sh
+PROFILE=qemu-x86_64 ./scripts/inspect-image.sh
+./scripts/run-qemu.sh
+```
+
+A saída fica em `output/qemu-x86_64/`; a imagem Pi 5 em `output/pi5/` é preservada. O lançador usa KVM quando acessível e emulação por software como alternativa (`QEMU_ACCEL=tcg ./scripts/run-qemu.sh`). A VM tem console no terminal e rede por NAT, sem privilégios de root ou portas expostas no host. Login de bancada: `root`, sem senha. Para sair: `Ctrl-a`, depois `x`; para desligar pelo console: `poweroff`.
+
+O disco usa snapshot temporário: alterações feitas dentro da VM são descartadas ao sair. Para persistir mudanças do sistema, edite o overlay ou os pacotes no repositório e recompile com o mesmo comando. Para configurar pacotes: `PROFILE=qemu-x86_64 ./scripts/menuconfig.sh`. Qt ainda não está habilitado neste perfil; o lançador atual usa apenas console.
+
+No console, confira `uname -m`, `cat /etc/elo-os-release`, `ip addr show eth0` e `ip route`. O roteiro está em [tests/boot/README.md](tests/boot/README.md). Continue usando `./scripts/build.sh` para gerar a imagem destinada ao Pi 5.
 
 ## Repositórios relacionados
 
