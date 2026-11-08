@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 cmake_minimum_required(VERSION 3.21)
 project(elo_client_demo VERSION 0.1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
@@ -7,3 +8,4 @@ qt_add_executable(elo-client main.cpp)
 qt_add_resources(elo-client "elo_ui" PREFIX "/" FILES Main.qml)
 target_link_libraries(elo-client PRIVATE Qt6::Core Qt6::Gui Qt6::Quick Qt6::Qml)
 install(TARGETS elo-client RUNTIME DESTINATION bin)
+install(FILES COPYING DESTINATION share/licenses/elo-client)

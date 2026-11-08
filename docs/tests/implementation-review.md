@@ -27,7 +27,7 @@ O plano é consistente com a constituição e com a base Linux/BusyBox: três pe
 | T-013–014 | Qt, ELO real, offline, watchdog e atualização fora desta rodada de base |
 | T-015 | Plano atual já versionado; histórico recuperado e fechamento x86 documentado |
 | T-016 | Idle antes/depois do login, falha em respawn inesperado/panic, marcadores que o eco não consegue satisfazer, timeout e relatório de falha |
-| T-017 | Licença do código exige decisão do mantenedor e permanece pendente; não atribuímos licença por inferência. Inventário de terceiros pode ser gerado via `legal-info` do Buildroot por perfil |
+| T-017 | Mantenedor escolheu GPLv3.0 durante esta rodada: código próprio GPL-3.0-only, LICENSE e metadados do pacote atualizados; inventário inicial em `docs/licenses.md`, sem reatribuir licenças de terceiros |
 
 Os requisitos de testes e documentação não adicionam programas ao convidado: o trabalho fica em scripts Python/shell do host. O rootfs permanece Linux + BusyBox e dependências já previstas; não foram ativados Qt, sudo, SSH, watchdog ou novos serviços.
 
@@ -45,4 +45,4 @@ O host não tinha `qemu-system-aarch64`; a validação local usa o RPM oficial F
 
 ## Critério para avançar
 
-Consultar a [matriz de aceitação](acceptance.md) e os relatórios em `docs/evidence/`. Não recompilar baselines por rotina; testes de regressão usam os arquivos existentes com snapshot e comparação de hashes. Qt e armazenamento persistente exigem etapas próprias após os ensaios da base. Nenhuma política de licença, proteção de branch ou homologação de hardware foi presumida como concluída.
+Consultar a [matriz de aceitação](acceptance.md) e os relatórios em `docs/evidence/`. Não recompilar baselines por rotina; testes de regressão usam os arquivos existentes com snapshot e comparação de hashes. Qt e armazenamento persistente exigem etapas próprias após os ensaios da base. A licença do código próprio foi escolhida explicitamente pelo mantenedor. Proteção de branch, inventário jurídico completo da distribuição e homologação de hardware não foram presumidos como concluídos.

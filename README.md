@@ -105,4 +105,4 @@ O [plano de implementação](docs/ELO-OS-IMPL-001_v0.1.1.md), sua [revisão](doc
 
 `VERSION` identifica a versão do **projeto**, não a versão de uma imagem executada. As decisões de `docs/adr` estão **propostas**. Cada avanço só vira *demonstrado* com evidências e testes.
 
-Licenciamento de código ainda requer definição explícita pelo mantenedor; não presumir licença do ELO existente nem da distribuição resultante. As licenças das dependências permanecem aplicáveis e precisarão ser inventariadas.
+O código próprio do ELO/OS é licenciado sob **GPL-3.0-only**, conforme decisão do mantenedor em 2026-11-08; o texto integral está em [LICENSE](LICENSE). Kernel, Buildroot, Qt, firmware, toolchains e demais componentes de terceiros preservam suas licenças. O escopo e o inventário inicial estão em [licenças](docs/licenses.md).
