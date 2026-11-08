@@ -106,7 +106,7 @@ QEMU_ACCEL=tcg python3 tests/boot/qemu-smoke.py
 
 Q0 verifica estrutura, sintaxe e Kconfig dos cinco perfis, sem compilar ou inicializar imagens. Q1 executa duas sessões reais no perfil escolhido, incluindo PID 1, console, ext4, DHCP, shutdown, estabilidade do login e hashes antes/depois. Logs e relatórios JSON ficam em `output/<perfil>/qemu-smoke-*`; timeout/falha produz código diferente de zero. Os testes devem rodar após o build, sem outra VM ou build no mesmo diretório de saída.
 
-O [plano de implementação](docs/ELO-OS-IMPL-001_v0.1.1.md), sua [revisão](docs/tests/implementation-review.md) e o [roteiro físico](tests/boot/pi5-first-boot.md) separam os resultados virtuais dos ensaios de hardware.
+O [plano P1](docs/ELO-OS-IMPL-001_v0.1.1.md), sua [revisão](docs/tests/implementation-review.md) e o [roteiro físico](tests/boot/pi5-first-boot.md) separam os resultados virtuais dos ensaios de hardware. O [IMPL-002](docs/ELO-OS-IMPL-002_v0.1.0.md) foi preservado como plano P2; sua [revisão de escopo](docs/tests/p2-client-review.md) e a [evidência do cliente](docs/evidence/P2-CLIENT-20261108.md) distinguem o que já foi testado das etapas futuras de persistência, servidor e supervisão.
 
 ## Repositórios relacionados
 

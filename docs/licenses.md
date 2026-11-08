@@ -78,3 +78,26 @@ Metadados: 45 entradas totais, 11 entradas de alvo.
 | toolchain-external | — | — |
 | toolchain-external-bootlin | 2025.08-1 | unknown |
 | urandom-scripts |  | GPL-2.0-or-later |
+
+## Perfis gráficos virtuais P2
+
+Inventário de configuração obtido em 2026-11-08, sem executar outro make sobre um `O=` em compilação: carregar cada defconfig GUI em diretório temporário próprio e executar `show-info` ali. Os JSON resultantes foram salvos em `output/qemu-{x86_64,aarch64}-gui/software-inventory.json`. Eles descrevem dependências resolvidas por Kconfig, não comprovam por si só instalação ou execução. Ambos têm 24 entradas de alvo; x86 tem 66 entradas totais, ARM64 64. O pacote virtual `zlib` também aparece sem licença própria; a implementação é `libzlib`.
+
+Adições de alvo em relação aos perfis de console:
+
+| Pacote | Versão | Licenças declaradas pelo Buildroot |
+| --- | --- | --- |
+| dejavu | 2.37 | Bitstream-Vera |
+| double-conversion | 3.4.0 | BSD-3-Clause |
+| elo-client | 0.1.0 | GPL-3.0-only |
+| freetype | 2.14.3 | FTL or GPL-2.0+ |
+| libb2 | 0.98.1 | CC0-1.0 |
+| libdrm | 2.4.134 | MIT |
+| libpthread-stubs | 0.5 | MIT |
+| libzlib | 1.3.2 | Zlib |
+| pcre2 | 10.49 | BSD-3-Clause |
+| qt6base | 6.11.2 | GPL-2.0+ or LGPL-3.0, GPL-3.0 with exception (tools), GFDL-1.3 (docs), Apache-2.0, BSD-3-Clause, BSL-1.0, MIT |
+| qt6declarative | 6.11.2 | LGPL-3.0 or GPL-3.0 or GPL-2.0, BSD-3-Clause (docs), GFDL-1.3 no invariants (docs), BSD-3-Clause (examples), GPL-3.0 (tests), GPL-3.0 WITH Qt-GPL-exception-1.0 (tools) |
+| qt6shadertools | 6.11.2 | Apache-2.0 or MIT (SPIRV-Cross), GPL-2.0 or LGPL-3.0 or GPL-3.0, GPL-3.0 (tests), GFDL-1.3 no invariants (docs), GPL-3.0 WITH Qt-GPL-exception-1.0 (tools) |
+
+Qt mantém as licenças declaradas dos seus módulos; nenhum texto/licença de terceiro foi substituído por GPL-3.0-only do projeto. A toolchain externa continua com metadado `unknown` e exige a coleta separada de textos/fontes. `legal-info` e revisão completa de distribuição continuam pendentes; este inventário não declara essa etapa concluída.

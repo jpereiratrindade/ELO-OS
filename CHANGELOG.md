@@ -2,6 +2,10 @@
 
 ## [Unreleased] — desenvolvimento após o scaffold
 
+- IMPL-002 incorporado sem alterações; núcleo portátil C++23, fixture local validada, eventos tipados e confirmação de apresentação antes de READY_LOCAL. Testes de falha/retry e eventos offline, frontend Qt/QML testado no Fedora e núcleo AArch64 executado em QEMU user; C++26 permanece experimento do subconjunto usado.
+- Perfis gráficos QEMU opt-in isolados, Qt Quick por software/LinuxFB/DRM/VirtIO GPU, smoke de framebuffer/entrada sem NIC. Build/boot gráfico têm gates próprios; supervisão e hardware Pi 5 pendentes.
+- CI acrescenta contratos do núcleo e Qt/Xvfb de host; regressão dos seis boots de console passou após extensão do lançador, sem alterar hashes históricos.
+- `fsck.fat -n -v` repetido com código zero e hash FAT preservado; documento registra a saída apresentada pelo operador e a inspeção local.
 - Pré-checagem Pi 5 somente leitura: SHA-256 esperado, limites MBR, assinaturas FAT/ext4 e relatório JSON; testes negativos no Q0 e modelo de evidência física. Boot físico continua pendente.
 - 2026-11-08: imagem Pi 5 compilada e inspecionada; boot físico pendente.
 - 2026-11-08: boot QEMU x86_64 verificado com KVM e TCG, em dois boots por modo; hashes registrados em `01574c6`.

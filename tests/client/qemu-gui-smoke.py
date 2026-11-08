@@ -153,6 +153,8 @@ def main():
             if re.search(r'failed to load component|ReferenceError|TypeError|Cannot assign', result):
                 raise RuntimeError('Erro QML observado')
             report['memory_kib'] = command('memory', 'free -k')
+            report['client_memory'] = command('client-memory',
+                'sed -n "/^VmRSS:/p; /^VmSize:/p; /^Threads:/p" /proc/$(cat /run/elo-client.pid)/status')
             qmp = Qmp(path)
             time.sleep(2)
             first = frame('ready')
