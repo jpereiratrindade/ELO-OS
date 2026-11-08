@@ -41,6 +41,8 @@ O comando `./scripts/build.sh` cria `.cache/buildroot-2026.08.1/`, configura `ou
 
 A imagem Pi 5 foi gerada e inspecionada; seu boot físico permanece pendente. A primeira imagem **não habilita o cliente Qt**: é uma base Pi 5 com identidade ELO/OS. Validar boot e console antes de adicionar a interface gráfica. Os arquivos `board/elo/pi5/genimage.cfg`, `post-image.sh` e `package/elo-client/` estão preparados para fases futuras e **não devem ser interpretados como integração homologada**.
 
+Próxima etapa: executar `python3 scripts/pi5-preflight.py` no Fedora e seguir o [roteiro de primeiro boot físico](tests/boot/pi5-first-boot.md). A checagem compara a imagem histórica com seu hash registrado e inspeciona partições e assinaturas sem gravar mídia. O [modelo de evidência](tests/boot/pi5-evidence-template.md) prepara o registro do primeiro boot e das 30 partidas.
+
 ### Segundo marco: P2, demo Qt
 
 Após validar o perfil P1, executar `./scripts/menuconfig.sh` e habilitar `elo-client (Qt Quick proof-of-concept)` em `External options`. O pacote depende de Qt 6 Base (GUI) e Qt Declarative; configurar DRM/Mesa/EGL e requisitos de Qt no Buildroot. Gravar nova defconfig somente após os testes de configuração. O demo ainda **não contém protocolo ELO, cache, eventos nem lógica de domínio**.

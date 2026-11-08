@@ -2,6 +2,7 @@
 
 ## [Unreleased] — desenvolvimento após o scaffold
 
+- Pré-checagem Pi 5 somente leitura: SHA-256 esperado, limites MBR, assinaturas FAT/ext4 e relatório JSON; testes negativos no Q0 e modelo de evidência física. Boot físico continua pendente.
 - 2026-11-08: imagem Pi 5 compilada e inspecionada; boot físico pendente.
 - 2026-11-08: boot QEMU x86_64 verificado com KVM e TCG, em dois boots por modo; hashes registrados em `01574c6`.
 - Plano documental v0.1.1 incorporado em `ba13e84`; versão do software mantida em `0.1.0`.
