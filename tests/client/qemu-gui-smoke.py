@@ -155,7 +155,8 @@ def main():
                 raise RuntimeError('BusyBox init e raiz ext4 não demonstrados')
             report['guest_init_mounts'] = result
             command('offline-no-nic', 'test "$(ls /sys/class/net)" = lo && test -z "$(ip route)"')
-            command('client-running', 'test -s /run/elo-client.pid && kill -0 "$(cat /run/elo-client.pid)" && '
+            command('client-running', 'cat /run/elo-client.log; '
+                    'test -s /run/elo-client.pid && kill -0 "$(cat /run/elo-client.pid)" && '
                     'test "$(readlink /proc/$(cat /run/elo-client.pid)/exe)" = /usr/bin/elo-client')
             result = command('local-readiness', 'for n in $(seq 1 60); do '
                              'grep -q "state=READY_LOCAL" /run/elo-client.log && break; sleep 1; done; '
