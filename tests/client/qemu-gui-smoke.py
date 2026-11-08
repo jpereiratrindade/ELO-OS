@@ -75,7 +75,8 @@ def main():
               'config_sha256': digest(out / '.config'),
               'hashes_before': {p.name: digest(p) for p in images},
               'network': 'no virtual NIC', 'status': 'FAIL', 'checks': []}
-    deadline = time.monotonic() + float(os.environ.get('QEMU_BOOT_TIMEOUT', '240'))
+    started = time.monotonic()
+    deadline = started + float(os.environ.get('QEMU_BOOT_TIMEOUT', '240'))
     proc = None
     qmp = None
     with tempfile.TemporaryDirectory(prefix='elo-gui-') as temp, (out / 'gui-smoke.log').open('wb') as log:
@@ -167,6 +168,10 @@ def main():
             report['memory_kib'] = command('memory', 'free -k')
             report['client_memory'] = command('client-memory',
                 'sed -n "/^VmRSS:/p; /^VmSize:/p; /^Threads:/p" /proc/$(cat /run/elo-client.pid)/status')
+            report['qt_runtime_libraries'] = command('qt-runtime-libraries',
+                "awk '/libQt6/ {print $NF}' /proc/$(cat /run/elo-client.pid)/maps | sort -u")
+            if 'libQt6Core.so' not in report['qt_runtime_libraries']:
+                raise RuntimeError('Biblioteca Qt Core carregada não demonstrada')
             qmp = Qmp(path)
             time.sleep(2)
             first = frame('ready')
@@ -208,6 +213,7 @@ def main():
             log.flush()
             match = re.search(rb'ACCEL=(\w+)', (out / 'gui-smoke.log').read_bytes())
             report['qemu_acceleration'] = match[1].decode() if match else 'NOT_RECORDED'
+            report['duration_seconds'] = round(time.monotonic() - started, 3)
             if report['hashes_before'] != report['hashes_after']:
                 report['status'] = 'FAIL'
                 report['error'] = 'Imagem base alterada'
