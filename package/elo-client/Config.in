@@ -1,8 +1,9 @@
 config BR2_PACKAGE_ELO_CLIENT
-    bool "elo-client (Qt Quick proof-of-concept; P2)"
+    bool "elo-client (apresentação local Qt Quick; P2)"
     depends on BR2_PACKAGE_QT6BASE_GUI
     depends on BR2_PACKAGE_QT6DECLARATIVE
+    depends on BR2_PACKAGE_QT6DECLARATIVE_QUICK
     help
-      Aplicação Qt/QML mínima para teste gráfico.
+      Núcleo portátil e apresentação local Qt/QML, sem rede.
       Não implementa o protocolo nem o domínio ELO.
       Exige configuração apropriada da pilha gráfica DRM/KMS.

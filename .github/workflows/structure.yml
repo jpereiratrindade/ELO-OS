@@ -1,4 +1,4 @@
-name: ELO-OS Q0 (structure and configuration)
+name: ELO-OS (Q0 and client contracts)
 on:
   push:
   pull_request:
@@ -28,5 +28,31 @@ jobs:
           ref: 7fdeadb3b9f12f78e5fccca914d7fef47090ab9a # 2026.08.1
           path: .cache/buildroot-2026.08.1
           persist-credentials: false
-      - name: Q0 - load three Kconfig profiles without building images
+      - name: Q0 - load console and GUI Kconfig profiles without building images
         run: python3 tests/config-smoke.py
+  client-core:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Portable C++ core without Qt
+        run: |
+          cmake -S package/elo-client/src -B build/client-core -DELO_BUILD_GUI=OFF -DELO_BUILD_TESTS=ON -DELO_CXX_STANDARD=23 -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/client-core --parallel 2
+          ctest --test-dir build/client-core --output-on-failure
+  client-qt:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Qt development and headless display dependencies
+        run: sudo apt-get update && sudo apt-get install -y qt6-base-dev qt6-declarative-dev qml6-module-qtquick qml6-module-qtquick-window qml6-module-qtqml-workerscript xvfb xauth fonts-dejavu-core
+      - name: Qt local presentation and keyboard/mouse interaction
+        run: |
+          cmake -S package/elo-client/src -B build/client-qt -DELO_BUILD_TESTS=ON -DELO_CXX_STANDARD=23 -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/client-qt --parallel 2
+          QT_QUICK_BACKEND=software xvfb-run -a -s '-screen 0 1280x800x24' ctest --test-dir build/client-qt --output-on-failure

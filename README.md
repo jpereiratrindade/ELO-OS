@@ -4,7 +4,7 @@
 
 **Versão de projeto:** `v0.1.0` · **Estado:** base experimental com boot QEMU x86_64 e ARM64 demonstrado; Pi 5 físico pendente · **Hardware:** Raspberry Pi 5, ARM64
 
-O ELO/OS é uma árvore `br2-external` do Buildroot para compor uma distribuição-appliance Linux mínima. **Não é outro kernel**, nem o ELO Server, nem a aplicação ELO existente. A imagem Pi 5 foi compilada; a base x86_64 iniciou em QEMU com KVM e TCG, e a base ARM64 `virt` iniciou com TCG. Há um *demo* Qt opcional para etapa futura. **Não afirma funcionamento gráfico nem confiabilidade homologados no hardware.**
+O ELO/OS é uma árvore `br2-external` do Buildroot para compor uma distribuição-appliance Linux mínima. **Não é outro kernel**, nem o ELO Server, nem a aplicação ELO existente. A imagem Pi 5 foi compilada; a base x86_64 iniciou em QEMU com KVM e TCG, e a base ARM64 `virt` iniciou com TCG. Há uma apresentação local experimental em C++/Qt Quick, independente da rede. **Não afirma funcionamento gráfico nem confiabilidade homologados no hardware.**
 
 ## Decisões iniciais
 
@@ -16,9 +16,9 @@ O ELO/OS é uma árvore `br2-external` do Buildroot para compor uma distribuiç�
 ## Árvore
 
 - `docs/`: constituição e ADRs versionados; critérios de aceitação.
-- `configs/`: três perfis derivados do Buildroot 2026.08.1: Pi 5, QEMU x86_64 e QEMU ARM64 `virt`.
+- `configs/`: perfis de console Pi 5/x86_64/ARM64 e dois perfis gráficos QEMU isolados.
 - `board/elo/common/`: arquivos compartilhados; `board/elo/<perfil>/`: identidade e ajustes por plataforma.
-- `package/elo-client/`: demonstração Qt/QML **opcional, não incluída na imagem P1**.
+- `package/elo-client/`: núcleo portátil C++ e apresentação Qt/QML **opcional, fora das imagens P1 de console**.
 - `scripts/`: build, diagnóstico e inventário da imagem.
 - `tests/`: verificações do repositório e roteiros de ensaio.
 
@@ -43,9 +43,20 @@ A imagem Pi 5 foi gerada e inspecionada; seu boot físico permanece pendente. A 
 
 Próxima etapa: executar `python3 scripts/pi5-preflight.py` no Fedora e seguir o [roteiro de primeiro boot físico](tests/boot/pi5-first-boot.md). A checagem compara a imagem histórica com seu hash registrado e inspeciona partições e assinaturas sem gravar mídia. O [modelo de evidência](tests/boot/pi5-evidence-template.md) prepara o registro do primeiro boot e das 30 partidas.
 
-### Segundo marco: P2, demo Qt
+### Segundo marco: P2, apresentação local
 
-Após validar o perfil P1, executar `./scripts/menuconfig.sh` e habilitar `elo-client (Qt Quick proof-of-concept)` em `External options`. O pacote depende de Qt 6 Base (GUI) e Qt Declarative; configurar DRM/Mesa/EGL e requisitos de Qt no Buildroot. Gravar nova defconfig somente após os testes de configuração. O demo ainda **não contém protocolo ELO, cache, eventos nem lógica de domínio**.
+O núcleo C++ começa sem rede e oferece três páginas locais com navegação e reinício. O frontend Qt Quick observa os estados e encaminha teclado/botões. É uma apresentação básica de disponibilidade; ainda não implementa protocolo ELO, conteúdo do servidor, cache, identidade pessoal ou sincronização.
+
+No Fedora com dependências Qt de desenvolvimento disponíveis:
+
+```bash
+./scripts/run-client.sh
+# Opcional: ./scripts/run-client.sh --fullscreen
+```
+
+Build nativo em `build/client-fedora/`, separado do Buildroot. O padrão é C++23 portátil; C++26 é um perfil experimental explícito, avaliado pelo código e testes reais. Consulte o [contrato e comandos de teste do cliente](tests/client/README.md) e a [decisão arquitetural](docs/adr/ADR-009-local-client.md).
+
+Para a bancada gráfica, use `PROFILE=qemu-x86_64-gui` ou `PROFILE=qemu-aarch64-gui` com `scripts/build.sh` e `scripts/run-qemu.sh`. Cada perfil tem saída própria em `output/`, Qt Quick por software, LinuxFB/DRM, VirtIO GPU e apresentação em tela cheia. O teste `tests/client/qemu-gui-smoke.py` remove a NIC virtual e exercita o framebuffer e o teclado. Essa pilha não comprova EGLFS/V3D na Pi 5; não habilite o cliente no perfil físico antes de configurar e validar sua pilha gráfica.
 
 ### Desenvolvimento no Fedora com QEMU
 
@@ -93,7 +104,7 @@ QEMU_ACCEL=kvm python3 tests/boot/qemu-smoke.py
 QEMU_ACCEL=tcg python3 tests/boot/qemu-smoke.py
 ```
 
-Q0 verifica estrutura, sintaxe e Kconfig dos três perfis, sem compilar ou inicializar imagens. Q1 executa duas sessões reais no perfil escolhido, incluindo PID 1, console, ext4, DHCP, shutdown, estabilidade do login e hashes antes/depois. Logs e relatórios JSON ficam em `output/<perfil>/qemu-smoke-*`; timeout/falha produz código diferente de zero. Os testes devem rodar após o build, sem outra VM ou build no mesmo diretório de saída.
+Q0 verifica estrutura, sintaxe e Kconfig dos cinco perfis, sem compilar ou inicializar imagens. Q1 executa duas sessões reais no perfil escolhido, incluindo PID 1, console, ext4, DHCP, shutdown, estabilidade do login e hashes antes/depois. Logs e relatórios JSON ficam em `output/<perfil>/qemu-smoke-*`; timeout/falha produz código diferente de zero. Os testes devem rodar após o build, sem outra VM ou build no mesmo diretório de saída.
 
 O [plano de implementação](docs/ELO-OS-IMPL-001_v0.1.1.md), sua [revisão](docs/tests/implementation-review.md) e o [roteiro físico](tests/boot/pi5-first-boot.md) separam os resultados virtuais dos ensaios de hardware.
 
@@ -105,6 +116,6 @@ O [plano de implementação](docs/ELO-OS-IMPL-001_v0.1.1.md), sua [revisão](doc
 
 ## Versão e status
 
-`VERSION` identifica a versão do **projeto**, não a versão de uma imagem executada. As decisões de `docs/adr` estão **propostas**. Cada avanço só vira *demonstrado* com evidências e testes.
+`VERSION` identifica a versão do **projeto**, não a versão de uma imagem executada. As decisões de `docs/adr` têm status explícito; ADR-009 aceita a apresentação local experimental, e as propostas de hardware/produção continuam pendentes. Cada avanço só vira *demonstrado* com evidências e testes.
 
 O código próprio do ELO/OS é licenciado sob **GPL-3.0-only**, conforme decisão do mantenedor em 2026-11-08; o texto integral está em [LICENSE](LICENSE). Kernel, Buildroot, Qt, firmware, toolchains e demais componentes de terceiros preservam suas licenças. O escopo e o inventário inicial estão em [licenças](docs/licenses.md).

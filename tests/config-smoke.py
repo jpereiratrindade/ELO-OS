@@ -9,7 +9,9 @@ ROOT = Path(__file__).resolve().parents[1]
 BR = Path(os.environ.get("BUILDROOT_DIR", ROOT / ".cache/buildroot-2026.08.1")).resolve()
 PROFILES = {"pi5": ("elo_pi5_defconfig", "aarch64", None),
             "qemu-x86_64": ("elo_qemu_x86_64_defconfig", "x86_64", "ttyS0"),
-            "qemu-aarch64": ("elo_qemu_aarch64_defconfig", "aarch64", "ttyAMA0")}
+            "qemu-aarch64": ("elo_qemu_aarch64_defconfig", "aarch64", "ttyAMA0"),
+            "qemu-x86_64-gui": ("elo_qemu_x86_64_gui_defconfig", "x86_64", "ttyS0"),
+            "qemu-aarch64-gui": ("elo_qemu_aarch64_gui_defconfig", "aarch64", "ttyAMA0")}
 
 
 def main():
@@ -37,10 +39,22 @@ def main():
             for line in expected:
                 if line not in text.splitlines():
                     raise RuntimeError(f"{profile}: símbolo perdido pelo Kconfig: {line}")
-            for line in ("BR2_PACKAGE_ELO_CLIENT=y", "BR2_PACKAGE_QT6BASE=y", "BR2_PACKAGE_OPENSSH=y",
-                         "BR2_PACKAGE_DROPBEAR=y", "BR2_PACKAGE_SUDO=y"):
+            gui = profile.endswith("-gui")
+            if gui:
+                for line in ("BR2_PACKAGE_ELO_CLIENT=y", "BR2_PACKAGE_QT6BASE_LINUXFB=y",
+                             "BR2_PACKAGE_QT6DECLARATIVE_QUICK=y", "BR2_PACKAGE_LIBDRM=y",
+                             "BR2_PACKAGE_DEJAVU_SANS=y", 'BR2_TARGET_ROOTFS_EXT2_SIZE="256M"'):
+                    if line not in text.splitlines():
+                        raise RuntimeError(f"{profile}: requisito gráfico perdido: {line}")
+            forbidden = ["BR2_PACKAGE_OPENSSH=y", "BR2_PACKAGE_DROPBEAR=y", "BR2_PACKAGE_SUDO=y"]
+            if gui:
+                forbidden += ["BR2_PACKAGE_QT6BASE_NETWORK=y", "BR2_PACKAGE_QT6BASE_OPENGL=y",
+                              "BR2_PACKAGE_XORG7=y", "BR2_PACKAGE_WESTON=y"]
+            else:
+                forbidden += ["BR2_PACKAGE_ELO_CLIENT=y", "BR2_PACKAGE_QT6BASE=y"]
+            for line in forbidden:
                 if line in text.splitlines():
-                    raise RuntimeError(f"{profile}: pacote fora do P1: {line}")
+                    raise RuntimeError(f"{profile}: pacote fora do escopo: {line}")
             overlay = next(line for line in text.splitlines() if line.startswith("BR2_ROOTFS_OVERLAY="))
             if '/board/elo/common/rootfs-overlay' not in overlay or f'/board/elo/{profile}/rootfs-overlay' not in overlay:
                 raise RuntimeError(f"{profile}: overlays comum/específico ausentes")

@@ -1,0 +1,22 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-only
+# Experimental virtual GUI only; no process supervision or production policy.
+PIDFILE=/run/elo-client.pid
+case "$1" in
+  start)
+    export QT_QPA_PLATFORM=linuxfb
+    export QT_QPA_FB_DRM=1
+    export QT_QUICK_BACKEND=software
+    export QT_QPA_FONTDIR=/usr/share/fonts/dejavu
+    export XDG_RUNTIME_DIR=/run/elo-client
+    mkdir -p "$XDG_RUNTIME_DIR"
+    chmod 700 "$XDG_RUNTIME_DIR"
+    start-stop-daemon -S -b -m -p "$PIDFILE" -O /run/elo-client.log -x /usr/bin/elo-client -- --fullscreen
+    ;;
+  stop)
+    start-stop-daemon -K -p "$PIDFILE" -x /usr/bin/elo-client
+    rm -f "$PIDFILE"
+    ;;
+  restart) "$0" stop; "$0" start ;;
+  *) echo "Usage: $0 {start|stop|restart}" >&2; exit 2 ;;
+esac

@@ -29,7 +29,7 @@ else
   echo 'WARN: perfil ainda não configurado'
 fi
 if [[ "$PROFILE" == qemu-* ]]; then
-  if [[ "$PROFILE" == qemu-aarch64 ]]; then
+  if [[ "$ARCH" == aarch64 ]]; then
     binary=${QEMU:-qemu-system-aarch64}; package=qemu-system-aarch64-core
   else
     binary=${QEMU:-qemu-system-x86_64}; package=qemu-system-x86-core
@@ -41,7 +41,7 @@ if [[ "$PROFILE" == qemu-* ]]; then
     echo "FAIL: $binary ausente; Fedora: sudo dnf install $package (ou informe QEMU=/caminho/do/binário)"
     failed=1
   fi
-  if [[ "$PROFILE" == qemu-x86_64 && $(uname -m) == x86_64 && -r /dev/kvm && -w /dev/kvm ]]; then
+  if [[ "$ARCH" == x86_64 && $(uname -m) == x86_64 && -r /dev/kvm && -w /dev/kvm ]]; then
     echo 'PASS: KVM acessível; TCG também pode ser selecionado'
   else
     echo 'WARN: este perfil usa emulação por software TCG neste host'
