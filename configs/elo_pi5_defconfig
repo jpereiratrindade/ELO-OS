@@ -37,4 +37,4 @@ BR2_PACKAGE_HOST_MTOOLS=y
 
 # ELO/OS additions; no Qt/graphics enabled yet (P1).
 BR2_TARGET_GENERIC_HOSTNAME="elo-os"
-BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_ELO_OS_PATH)/board/elo/pi5/rootfs-overlay"
+BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_ELO_OS_PATH)/board/elo/common/rootfs-overlay $(BR2_EXTERNAL_ELO_OS_PATH)/board/elo/pi5/rootfs-overlay"

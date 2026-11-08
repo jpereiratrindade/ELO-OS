@@ -1,30 +1,42 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-OUT_DIR=${OUTPUT_DIR:-"$ROOT/output/qemu-x86_64"}
-QEMU=${QEMU:-qemu-system-x86_64}
+PROFILE=${PROFILE:-qemu-x86_64}
+source "$ROOT/scripts/profiles.sh"
+case "$PROFILE" in
+  qemu-x86_64) QEMU=${QEMU:-qemu-system-x86_64}; FEDORA_PACKAGE=qemu-system-x86-core ;;
+  qemu-aarch64) QEMU=${QEMU:-qemu-system-aarch64}; FEDORA_PACKAGE=qemu-system-aarch64-core ;;
+  *) echo 'Use um perfil QEMU para iniciar uma VM.' >&2; exit 2 ;;
+esac
+check_profile_config
 command -v "$QEMU" >/dev/null || {
-  echo 'QEMU ausente. No Fedora: sudo dnf install qemu-system-x86-core' >&2
+  echo "QEMU ausente. No Fedora: sudo dnf install $FEDORA_PACKAGE (ou informe QEMU=/caminho/do/binário)" >&2
   exit 1
 }
-for image in bzImage rootfs.ext4; do
+for image in "$KERNEL" rootfs.ext4; do
   [[ -f "$OUT_DIR/images/$image" ]] || {
     echo "Imagem ausente: $OUT_DIR/images/$image" >&2
-    echo 'Execute: PROFILE=qemu-x86_64 ./scripts/build.sh' >&2
+    echo "Execute: PROFILE=$PROFILE ./scripts/build.sh" >&2
     exit 1
   }
 done
 # A snapshot keeps the base image intact; guest writes disappear on exit.
 # User networking provides DHCP without root privileges or a host bridge.
 ACCEL=${QEMU_ACCEL:-tcg}
-if [[ -z ${QEMU_ACCEL:-} && $(uname -m) == x86_64 && -r /dev/kvm && -w /dev/kvm ]]; then
+if [[ "$PROFILE" == qemu-x86_64 && -z ${QEMU_ACCEL:-} && $(uname -m) == x86_64 && -r /dev/kvm && -w /dev/kvm ]]; then
   ACCEL=kvm
 fi
-echo "ELO/OS :: QEMU x86_64 ($ACCEL); login: root; sair: Ctrl-a x" >&2
-exec "$QEMU" \
-  -machine pc -accel "$ACCEL" -m "${QEMU_MEMORY:-512M}" -smp "${QEMU_CPUS:-2}" \
-  -kernel "$OUT_DIR/images/bzImage" \
-  -drive "file=$OUT_DIR/images/rootfs.ext4,if=virtio,format=raw,snapshot=on" \
-  -append 'rootwait root=/dev/vda console=ttyS0' \
-  -nic user,model=virtio-net-pci \
-  -display none -serial mon:stdio -no-reboot "$@"
+if [[ "$PROFILE" == qemu-aarch64 ]]; then
+  [[ "$ACCEL" == tcg ]] || { echo 'O perfil ARM64 de bancada usa TCG.' >&2; exit 2; }
+  machine=(-machine virt -cpu cortex-a53)
+  devices=(-drive "file=$OUT_DIR/images/rootfs.ext4,if=none,format=raw,id=hd0,snapshot=on"
+    -device virtio-blk-device,drive=hd0 -netdev user,id=net0 -device virtio-net-device,netdev=net0)
+else
+  machine=(-machine pc)
+  devices=(-drive "file=$OUT_DIR/images/rootfs.ext4,if=virtio,format=raw,snapshot=on" -nic user,model=virtio-net-pci)
+fi
+echo "ELO/OS :: PROFILE=$PROFILE · ARCH=$ARCH · ACCEL=$ACCEL · CONSOLE=$CONSOLE · root=/dev/vda · snapshot=on" >&2
+echo 'Bancada local: login root sem senha; desligar: poweroff; sair do QEMU: Ctrl-a x' >&2
+exec "$QEMU" "${machine[@]}" -accel "$ACCEL" -m "${QEMU_MEMORY:-512M}" -smp "${QEMU_CPUS:-2}" \
+  -kernel "$OUT_DIR/images/$KERNEL" "${devices[@]}" \
+  -append "rootwait root=/dev/vda console=$CONSOLE" -display none -serial mon:stdio -no-reboot "$@"

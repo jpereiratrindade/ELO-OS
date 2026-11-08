@@ -1,12 +1,32 @@
-name: ELO-OS structure
+name: ELO-OS Q0 (structure and configuration)
 on:
   push:
   pull_request:
   workflow_dispatch:
+permissions:
+  contents: read
 jobs:
-  verify-scaffold:
-    runs-on: ubuntu-latest
+  static-q0:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - name: Validate structure and shell syntax
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Q0 - structure, shell/Python syntax and tracked artifacts
         run: ./tests/smoke.sh
+  config-q0:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: buildroot/buildroot
+          ref: 7fdeadb3b9f12f78e5fccca914d7fef47090ab9a # 2026.08.1
+          path: .cache/buildroot-2026.08.1
+          persist-credentials: false
+      - name: Q0 - load three Kconfig profiles without building images
+        run: python3 tests/config-smoke.py

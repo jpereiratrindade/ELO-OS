@@ -1,31 +1,57 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-echo 'ELO/OS :: Diagnóstico do host'
-echo "Repositório: $ROOT"
-for x in git make gcc g++ python3 rsync tar awk sed xz gzip base64; do
-  if command -v "$x" >/dev/null 2>&1; then printf '  OK  %s
-' "$x";
-  else printf '  --  %s ausente
-' "$x"; fi
-done
-if [[ -f "$ROOT/.cache/buildroot-2026.08.1/Makefile" ]]; then
-  echo 'Buildroot fixado: disponível'
-else
-  echo 'Buildroot fixado: ainda não baixado (normal antes do build)'
-fi
-if command -v qemu-system-x86_64 >/dev/null 2>&1; then
-  echo 'QEMU x86_64: disponível'
-  if [[ -r /dev/kvm && -w /dev/kvm ]]; then
-    echo 'KVM: acessível'
+PROFILE=${PROFILE:-pi5}
+source "$ROOT/scripts/profiles.sh"
+failed=0
+printf 'ELO/OS :: Diagnóstico · PROFILE=%s · ARCH=%s\nBR2_EXTERNAL=%s\nO=%s\n' "$PROFILE" "$ARCH" "$ROOT" "$OUT_DIR"
+for tool in git make gcc g++ python3 rsync tar awk sed xz gzip base64 bzip2 patch perl cpio unzip file; do
+  if command -v "$tool" >/dev/null 2>&1; then
+    printf 'PASS: %s\n' "$tool"
   else
-    echo 'KVM: indisponível para este usuário; QEMU pode usar TCG'
+    printf 'FAIL: %s ausente\n' "$tool"
+    failed=1
+  fi
+done
+if [[ -f "$BR_DIR/Makefile" ]]; then
+  if grep -qx "export BR2_VERSION := $VERSION" "$BR_DIR/Makefile"; then
+    echo "PASS: Buildroot $VERSION em $BR_DIR"
+  else
+    echo "FAIL: Buildroot em $BR_DIR não é $VERSION"
+    failed=1
   fi
 else
-  echo 'QEMU x86_64: ausente (opcional; Fedora: sudo dnf install qemu-system-x86-core)'
+  echo "WARN: Buildroot ainda não baixado em $BR_DIR; build.sh baixa a release fixa"
 fi
-if [[ -e "$ROOT/output/pi5/images/sdcard.img" ]]; then
-  echo 'Imagem Pi 5: existe (não implica teste físico)'
+if [[ -f "$OUT_DIR/.config" ]]; then
+  if check_profile_config; then echo 'PASS: configuração pertence ao perfil'; else failed=1; fi
 else
-  echo 'Imagem Pi 5: ainda não compilada'
+  echo 'WARN: perfil ainda não configurado'
 fi
+if [[ "$PROFILE" == qemu-* ]]; then
+  if [[ "$PROFILE" == qemu-aarch64 ]]; then
+    binary=${QEMU:-qemu-system-aarch64}; package=qemu-system-aarch64-core
+  else
+    binary=${QEMU:-qemu-system-x86_64}; package=qemu-system-x86-core
+  fi
+  if command -v "$binary" >/dev/null 2>&1; then
+    "$binary" --version | head -1
+    echo 'PASS: emulador disponível'
+  else
+    echo "FAIL: $binary ausente; Fedora: sudo dnf install $package (ou informe QEMU=/caminho/do/binário)"
+    failed=1
+  fi
+  if [[ "$PROFILE" == qemu-x86_64 && $(uname -m) == x86_64 && -r /dev/kvm && -w /dev/kvm ]]; then
+    echo 'PASS: KVM acessível; TCG também pode ser selecionado'
+  else
+    echo 'WARN: este perfil usa emulação por software TCG neste host'
+  fi
+fi
+for artifact in "${artifacts[@]}"; do
+  if [[ -f "$OUT_DIR/images/$artifact" ]]; then
+    echo "PASS: artefato presente: $artifact (presença não comprova boot)"
+  else
+    echo "WARN: artefato ainda ausente: $artifact"
+  fi
+done
+exit "$failed"

@@ -1,10 +1,12 @@
 # Boot — testes P1
-- [ ] Imagem Pi 5 gerada por Buildroot 2026.08.1.
-- [ ] SHA-256 da imagem registrado.
+- [x] Imagem Pi 5 gerada por Buildroot 2026.08.1.
+- [x] SHA-256 da imagem registrado em `docs/evidence/P1-BUILT-PI5-20261108.md`.
 - [ ] 30 boot frios com console e logs.
 - [ ] EEPROM/firmware/Device Tree/kernel inventariados.
 - [ ] Sistema identifica `/etc/elo-os-release`.
 - [ ] Teste de queda de energia executado com mídia descartável e hardware adequado.
+
+A lista acima se refere à imagem e ao hardware Pi 5. Os boots virtuais abaixo não marcam os ensaios físicos como concluídos. O protocolo está em [pi5-first-boot.md](pi5-first-boot.md).
 
 ## Console virtual de desenvolvimento
 
@@ -18,7 +20,7 @@
 
 Esses testes validam a base virtual de desenvolvimento. Os ensaios físicos Pi 5 acima continuam necessários.
 
-Teste automatizado da imagem real: `python3 tests/boot/qemu-smoke.py`. Ele inicia duas sessões, verifica login, arquitetura, identidade, DHCP, rota, desligamento e descarte das escritas entre sessões. Os logs ficam em `output/qemu-x86_64/qemu-smoke-*.log` (ou no `OUTPUT_DIR` informado). Para verificar a alternativa sem KVM: `QEMU_ACCEL=tcg python3 tests/boot/qemu-smoke.py`.
+Teste automatizado da imagem real: `python3 tests/boot/qemu-smoke.py`. Ele inicia duas sessões, verifica login, arquitetura, identidade, DHCP, rota, desligamento e descarte das escritas entre sessões. Os logs e relatórios JSON ficam em `output/<perfil>/qemu-smoke-*` (ou no `OUTPUT_DIR` informado). Para verificar a alternativa sem KVM: `QEMU_ACCEL=tcg python3 tests/boot/qemu-smoke.py`.
 
 ## Validação virtual — 2026-11-08
 
@@ -37,3 +39,11 @@ SHA-256 das imagens virtuais testadas (artefatos locais em `output/qemu-x86_64/i
 ```
 
 Os testes físicos Pi 5 do roteiro P1 continuam pendentes. Qt não foi habilitado nem validado nesta imagem.
+
+## Regressão ampliada e ARM64
+
+`PROFILE=qemu-aarch64 python3 tests/boot/qemu-smoke.py` usa o mesmo contrato em imagens próprias ARM64, console `ttyAMA0` e TCG. O teste falha se detectar panic, repetição do login sem entrada, identidade/arquitetura incorretas, PID 1 diferente de BusyBox init, disco/raiz incorretos, ausência de DHCP/rota, falha de desligamento ou mutação da imagem base. Não depende de um IP ou nome de interface fixos. Por sessão registra saída real, PID do QEMU controlado, rede e memória; por execução registra hashes, revisão Git e defconfig.
+
+Use `QEMU=/caminho/do/binário` quando o emulador não estiver no PATH. O timeout padrão por boot é 180 segundos (`QEMU_BOOT_TIMEOUT`); o ensaio observa pelo menos um segundo de console ocioso antes e depois do login (padrão 3, `QEMU_IDLE_SECONDS`). Não rode teste durante build ou outra VM no mesmo `OUTPUT_DIR`.
+
+Os estados atuais estão na [matriz de aceitação](../../docs/tests/acceptance.md). Os resultados de 2026-11-08 acima são históricos e vinculados aos hashes indicados; relatórios de nova execução não devem ser atribuídos a imagens diferentes.
