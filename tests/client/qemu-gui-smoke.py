@@ -71,6 +71,7 @@ def main():
               'source_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
               'source_dirty': bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT)),
               'qemu_binary': emulator,
+              'qemu_module_dir': os.environ.get('QEMU_MODULE_DIR', 'default'),
               'config_sha256': digest(out / '.config'),
               'hashes_before': {p.name: digest(p) for p in images},
               'network': 'no virtual NIC', 'status': 'FAIL', 'checks': []}
