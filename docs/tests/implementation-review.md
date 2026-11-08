@@ -46,3 +46,9 @@ O host não tinha `qemu-system-aarch64`; a validação local usa o RPM oficial F
 ## Critério para avançar
 
 Consultar a [matriz de aceitação](acceptance.md) e os relatórios em `docs/evidence/`. Não recompilar baselines por rotina; testes de regressão usam os arquivos existentes com snapshot e comparação de hashes. Qt e armazenamento persistente exigem etapas próprias após os ensaios da base. A licença do código próprio foi escolhida explicitamente pelo mantenedor. Proteção de branch, inventário jurídico completo da distribuição e homologação de hardware não foram presumidos como concluídos.
+
+## Fechamento da rodada
+
+O gate Q1A passou em dois boots TCG ARM64 sobre a fonte `3737a9c`, com árvore limpa e hashes antes/depois iguais. O [relatório ARM64](../evidence/P1-QEMU-AARCH64-20261108.md) vincula binários, configurações, método e observações. Q0 local e a regressão x86 KVM/TCG passaram; o build Pi 5 foi preservado. A CI histórica `01574c6` foi conferida diretamente no [GitHub Actions](https://github.com/jpereiratrindade/ELO-OS/actions/runs/42511486558): sucesso somente estrutural.
+
+Entrega A fechada no escopo documental e local; entrega B demonstrada em ARM64 virtual; entrega C preparada como roteiro, com execução física ainda NOT TESTED. A arquitetura de armazenamento e os serviços de produção permanecem para etapas próprias.

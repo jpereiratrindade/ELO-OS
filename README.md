@@ -2,9 +2,9 @@
 
 > Faça simples. Depois deixe mais leve. **Sempre pronto. Sempre incompleto.**
 
-**Versão de projeto:** `v0.1.0` · **Estado:** base experimental com boot QEMU x86_64 demonstrado; ARM64 virtual em implementação · **Hardware:** Raspberry Pi 5, ARM64
+**Versão de projeto:** `v0.1.0` · **Estado:** base experimental com boot QEMU x86_64 e ARM64 demonstrado; Pi 5 físico pendente · **Hardware:** Raspberry Pi 5, ARM64
 
-O ELO/OS é uma árvore `br2-external` do Buildroot para compor uma distribuição-appliance Linux mínima. **Não é outro kernel**, nem o ELO Server, nem a aplicação ELO existente. A imagem Pi 5 foi compilada; a base x86_64 iniciou em QEMU com KVM e TCG. Há um *demo* Qt opcional para etapa futura. **Não afirma funcionamento gráfico nem confiabilidade homologados no hardware.**
+O ELO/OS é uma árvore `br2-external` do Buildroot para compor uma distribuição-appliance Linux mínima. **Não é outro kernel**, nem o ELO Server, nem a aplicação ELO existente. A imagem Pi 5 foi compilada; a base x86_64 iniciou em QEMU com KVM e TCG, e a base ARM64 `virt` iniciou com TCG. Há um *demo* Qt opcional para etapa futura. **Não afirma funcionamento gráfico nem confiabilidade homologados no hardware.**
 
 ## Decisões iniciais
 
@@ -80,7 +80,7 @@ PROFILE=qemu-aarch64 ./scripts/run-qemu.sh
 PROFILE=qemu-aarch64 python3 tests/boot/qemu-smoke.py
 ```
 
-Também é possível informar `QEMU=/caminho/do/binário` nos comandos de diagnóstico, execução e teste. A saída desse perfil fica somente em `output/qemu-aarch64/`. O build e os testes ARM64 estão pendentes de evidência nesta revisão; consulte [aceitação](docs/tests/acceptance.md) para o estado de cada artefato.
+Também é possível informar `QEMU=/caminho/do/binário` nos comandos de diagnóstico, execução e teste. A saída desse perfil fica somente em `output/qemu-aarch64/`. Build e dois boots ARM64 com TCG passaram, com PID 1, console, ext4, DHCP, shutdown, snapshot e hashes verificados; consulte [aceitação](docs/tests/acceptance.md) para o estado de cada artefato.
 
 ### Verificações rápidas (Q0) e teste de boot (Q1)
 

@@ -60,3 +60,21 @@ Metadados: 47 entradas totais, 11 entradas de alvo.
 | toolchain-external | — | — |
 | toolchain-external-bootlin | 2025.08-1 | unknown |
 | urandom-scripts |  | GPL-2.0-or-later |
+
+## qemu-aarch64
+
+Metadados: 45 entradas totais, 11 entradas de alvo.
+
+| Pacote | Versão declarada | Licenças declaradas |
+| --- | --- | --- |
+| busybox | 1.38.0 | GPL-2.0, bzip2-1.0.6 |
+| ifupdown-scripts |  | GPL-2.0-or-later |
+| initscripts |  | GPL-2.0-or-later |
+| linux | 6.18.7 | GPL-2.0 |
+| skeleton | — | — |
+| skeleton-init-common |  | GPL-2.0-or-later |
+| skeleton-init-sysv |  | GPL-2.0-or-later |
+| toolchain | — | — |
+| toolchain-external | — | — |
+| toolchain-external-bootlin | 2025.08-1 | unknown |
+| urandom-scripts |  | GPL-2.0-or-later |

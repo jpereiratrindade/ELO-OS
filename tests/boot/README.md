@@ -47,3 +47,5 @@ Os testes físicos Pi 5 do roteiro P1 continuam pendentes. Qt não foi habilitad
 Use `QEMU=/caminho/do/binário` quando o emulador não estiver no PATH. O timeout padrão por boot é 180 segundos (`QEMU_BOOT_TIMEOUT`); o ensaio observa pelo menos um segundo de console ocioso antes e depois do login (padrão 3, `QEMU_IDLE_SECONDS`). Não rode teste durante build ou outra VM no mesmo `OUTPUT_DIR`.
 
 Os estados atuais estão na [matriz de aceitação](../../docs/tests/acceptance.md). Os resultados de 2026-11-08 acima são históricos e vinculados aos hashes indicados; relatórios de nova execução não devem ser atribuídos a imagens diferentes.
+
+A rodada ARM64 de 2026-11-08 concluiu build e dois boots TCG com saída 0, na fonte `3737a9c`, com hashes preservados. Resultados e comandos estão em [P1-QEMU-AARCH64](../../docs/evidence/P1-QEMU-AARCH64-20261108.md). O aviso GPL-3.0-only do ELO/OS também foi conferido diretamente dentro do ext4.
