@@ -1,0 +1,3 @@
+menu "ELO/OS options"
+  source "$BR2_EXTERNAL_ELO_OS_PATH/package/elo-client/Config.in"
+endmenu

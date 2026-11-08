@@ -1,0 +1,28 @@
+# Downloads, output e imagens do Buildroot
+/.cache/
+/output/
+/dl/
+*.img
+*.img.xz
+*.qcow2
+*.ext4
+*.vfat
+*.tar.xz
+
+# Ferramentas e artefatos de desenvolvimento
+/build/
+*.swp
+*~
+.DS_Store
+.vscode/
+.idea/
+
+# Nunca versionar segredos nem dados do dispositivo
+*.key
+*.pem
+*.p12
+*.pfx
+*.secret
+/.env
+/data/
+/secrets/

@@ -1,0 +1,12 @@
+name: ELO-OS structure
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+jobs:
+  verify-scaffold:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate structure and shell syntax
+        run: ./tests/smoke.sh
