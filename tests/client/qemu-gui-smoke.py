@@ -66,9 +66,12 @@ def main():
     out = Path(os.environ.get('OUTPUT_DIR', ROOT / 'output' / profile)).resolve()
     kernel = 'Image' if arch == 'aarch64' else 'bzImage'
     images = [out / 'images' / name for name in (kernel, 'rootfs.ext4')]
+    emulator = os.environ.get('QEMU', f'qemu-system-{arch}')
     report = {'profile': profile, 'time_utc': datetime.now(timezone.utc).isoformat(),
               'source_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
               'source_dirty': bool(subprocess.check_output(['git', 'status', '--porcelain'], cwd=ROOT)),
+              'qemu_binary': emulator,
+              'config_sha256': digest(out / '.config'),
               'hashes_before': {p.name: digest(p) for p in images},
               'network': 'no virtual NIC', 'status': 'FAIL', 'checks': []}
     deadline = time.monotonic() + float(os.environ.get('QEMU_BOOT_TIMEOUT', '240'))
@@ -129,6 +132,7 @@ def main():
             return hashlib.sha256(pixels).hexdigest()
 
         try:
+            report['qemu_version'] = subprocess.check_output([emulator, '--version'], text=True).splitlines()[0]
             proc = subprocess.Popen([str(ROOT / 'scripts/run-qemu.sh'), '-qmp',
                                      f'unix:{path},server=on,wait=off'], env=env,
                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -138,9 +142,16 @@ def main():
             wait_for(rb'# ')
             send('stty -echo')
             wait_for(rb'# ')
-            result = command('architecture-identity', 'uname -m; cat /etc/elo-os-release')
+            result = command('architecture-identity', 'uname -m; uname -r; cat /etc/elo-os-release')
             if not re.search(rf'(?m)^{arch}$', result) or f'PLATFORM="{profile}"' not in result:
                 raise RuntimeError('Arquitetura/identidade incorretas')
+            report['guest_identity'] = result
+            result = command('init-root', 'cat /proc/1/comm; readlink /proc/1/exe; '
+                             'cat /proc/mounts; test -b /dev/vda')
+            if (not re.search(r'(?m)^init$', result) or not re.search(r'(?m)^/.*busybox$', result)
+                    or not re.search(r'(?m)^\S+ / ext4 ', result)):
+                raise RuntimeError('BusyBox init e raiz ext4 não demonstrados')
+            report['guest_init_mounts'] = result
             command('offline-no-nic', 'test "$(ls /sys/class/net)" = lo && test -z "$(ip route)"')
             command('client-running', 'test -s /run/elo-client.pid && kill -0 "$(cat /run/elo-client.pid)" && '
                     'test "$(readlink /proc/$(cat /run/elo-client.pid)/exe)" = /usr/bin/elo-client')
@@ -193,6 +204,9 @@ def main():
                 proc.stdin.close()
                 proc.stdout.close()
             report['hashes_after'] = {p.name: digest(p) for p in images}
+            log.flush()
+            match = re.search(rb'ACCEL=(\w+)', (out / 'gui-smoke.log').read_bytes())
+            report['qemu_acceleration'] = match[1].decode() if match else 'NOT_RECORDED'
             if report['hashes_before'] != report['hashes_after']:
                 report['status'] = 'FAIL'
                 report['error'] = 'Imagem base alterada'
