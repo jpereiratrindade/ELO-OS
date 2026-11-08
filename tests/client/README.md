@@ -58,3 +58,19 @@ No Fedora, a bancada gráfica também precisa dos módulos VirtIO GPU/PCI e, par
 Logs, três frames PPM e relatório JSON ficam em `output/<perfil>/gui-*`; timeout por boot padrão de 240 s (`QEMU_BOOT_TIMEOUT`). Não executar durante build ou outra VM no mesmo diretório. `QEMU_ACCEL=tcg` permite repetir x86 sem KVM; ARM64 usa TCG neste host. O teste gráfico é separado de `tests/boot/qemu-smoke.py`, cujo contrato continua restrito aos perfis de console com DHCP.
 
 Os perfis gráficos têm rootfs de 256 MiB, 1 GiB de RAM virtual por padrão, fontes DejaVu Sans, Qt Quick e libdrm. O tamanho provisionado não é memória medida do cliente. A raiz permanece RW e o cliente inicia como root apenas nesta bancada experimental. Não há supervisão automática após falha. Estados e hashes testados ficam na [matriz](../../docs/tests/acceptance.md).
+
+## Iteração depois do primeiro build
+
+Para mudanças em C++/QML, comece pelo build/teste nativo acima. Com o build e a VM do perfil encerrados, atualize somente o pacote local e depois regenere a imagem:
+
+```bash
+GUI_PROFILE=qemu-x86_64-gui  # ou qemu-aarch64-gui
+make -C .cache/buildroot-2026.08.1 O="$PWD/output/$GUI_PROFILE" \
+  BR2_EXTERNAL="$PWD" -j4 elo-client-rebuild
+PROFILE="$GUI_PROFILE" JOBS=4 ./scripts/build.sh
+PROFILE="$GUI_PROFILE" python3 tests/client/qemu-gui-smoke.py
+```
+
+`elo-client-rebuild` sincroniza novamente o `SITE_METHOD=local`, recompila/reinstala a aplicação e reutiliza dependências Qt já concluídas. O segundo comando é necessário para gerar um novo `rootfs.ext4`; reconstruir apenas o pacote não atualiza a imagem. Para mudanças nas opções CMake, use `elo-client-reconfigure` no lugar de `elo-client-rebuild`. Alterações de toolchain, configuração Qt ou dependências exigem revisar o procedimento de rebuild do Buildroot separadamente.
+
+Não executar esses comandos enquanto houver outro make no mesmo `O=`. Não apontar o diretório de saída para os perfis de console/Pi 5 históricos. Cada imagem nova tem outro hash e precisa de seu próprio ensaio; o relatório anterior não a valida automaticamente.
