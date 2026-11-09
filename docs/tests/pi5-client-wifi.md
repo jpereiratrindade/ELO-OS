@@ -88,5 +88,8 @@ entradas inválidas. Não associa uma interface Wi-Fi.
 O segundo requer imagem pronta em `output/pi5-client` e kernel ARM64 virtual em
 `output/toolbox/qemu-aarch64-gui/images/Image` (ou `QEMU_TEST_KERNEL`). Usa snapshot,
 sem NIC, renderização LinuxFB real, teclado virtual e Escape. Guarda relatório e
-frames em `output/pi5-client`. O kernel é genérico: o teste não inicializa firmware,
+frames em `output/pi5-client`. A CPU virtual `max` suporta instruções ARMv8.2 usadas no Cortex-A76;
+Cortex-A53 não é suficiente. O kernel é genérico: o teste não inicializa firmware,
 GPU, rádio nem kernel físico do Pi 5. Não executar durante build da imagem.
+
+Build e raiz virtual passaram em 2026-11-09; consulte [evidência da imagem](../evidence/P2-PI5-CLIENT-BUILT-20261109.md). Validação física do cliente e Wi-Fi permanece pendente.

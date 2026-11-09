@@ -10,9 +10,11 @@ import re
 import secrets
 import select
 import subprocess
+import sys
 import tempfile
 import time
 
+sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location('gui_smoke', ROOT / 'tests/client/qemu-gui-smoke.py')
 gui = importlib.util.module_from_spec(spec)
@@ -26,7 +28,7 @@ def main():
     assert rootfs.is_file() and kernel.is_file(), 'Build rootfs and a generic QEMU ARM64 kernel first'
     report = {'status': 'FAIL', 'scope': 'Pi client rootfs with generic virt ARM64 kernel; no Pi firmware, VC4 or Wi-Fi validation',
               'rootfs_sha256_before': gui.digest(rootfs), 'kernel': str(kernel),
-              'kernel_sha256': gui.digest(kernel), 'checks': []}
+              'kernel_sha256': gui.digest(kernel), 'qemu_cpu': 'max (supports Pi 5 ARMv8.2 instructions)', 'checks': []}
     proc = qmp = None
     deadline = time.monotonic() + 240
     buffer = b''
@@ -85,7 +87,7 @@ def main():
         try:
             sock = Path(temp) / 'qmp.sock'
             proc = subprocess.Popen([os.environ.get('QEMU', 'qemu-system-aarch64'),
-                '-machine', 'virt', '-cpu', 'cortex-a53', '-accel', 'tcg', '-m', '1024M', '-smp', '2',
+                '-machine', 'virt', '-cpu', 'max', '-accel', 'tcg', '-m', '1024M', '-smp', '2',
                 '-kernel', str(kernel), '-append', 'root=/dev/vda rootwait console=ttyAMA0',
                 '-drive', f'file={rootfs},if=none,format=raw,id=root,snapshot=on',
                 '-device', 'virtio-blk-device,drive=root', '-nic', 'none', '-display', 'none',
@@ -104,7 +106,11 @@ def main():
             report['ready_frame'] = frame('ready')
             qmp.key('right')
             health(2)
-            report['next_frame'] = frame('next')
+            for _ in range(40):
+                report['next_frame'] = frame('next')
+                if report['ready_frame'] != report['next_frame']:
+                    break
+                time.sleep(0.25)
             assert report['ready_frame'] != report['next_frame'], 'Keyboard navigation did not change screen'
             qmp.key('esc')
             command('escape-exits-client', 'stopped=0; for n in $(seq 1 15); do if ! kill -0 "$(cat /run/bench.pid)" 2>/dev/null; then stopped=1; break; fi; sleep 1; done; test "$stopped" = 1')
