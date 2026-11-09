@@ -57,3 +57,7 @@ Reprodução: [roteiro do desktop](../tests/desktop-validation.md). Na Toolbox, 
 P2-A64 e P2-QGUI ARM64/TCG demonstrados para estes artefatos. Somados aos dois cenários [x86_64/KVM](P2-DESKTOP-X86-20261109.md), fecham o gate gráfico **virtual** descrito na matriz. Cliente nativo também passou na sessão Fedora por QPA xcb/Xwayland, com captura inspecionada na evidência x86.
 
 Não comprova hardware BCM2712/V3D, boot físico Pi 5, backend Wayland nativo, servidor/autenticação, 72 horas offline, `/data`, recuperação de energia ou navegação persistente. Rootfs segue RW, cliente como root e alterações da VM descartáveis. Qt ainda registra aviso de locale C sem locale UTF-8 disponível; a renderização acentuada observada está correta. Artefatos históricos P1 e perfil físico não foram recompilados.
+
+## Preservação da evidência
+
+Antes dos ensaios de regressão da etapa I1, os relatórios, logs, frames e harness desta baseline foram copiados para `output/desktop-validation/p2-baseline-99ede0c/`, em subdiretórios por perfil. Os caminhos de relatório nas saídas normais podem receber novas execuções; os resultados e hashes descritos neste documento correspondem à cópia preservada. As imagens base não foram reconstruídas para esses ensaios.

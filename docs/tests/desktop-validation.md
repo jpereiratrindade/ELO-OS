@@ -114,4 +114,4 @@ Essa recompilação passou no desktop, nos diretórios `build/client-aarch64-cor
 
 Não promover P2-QGUI por build concluído, PID, CI verde ou teste de processo simulado. Exigir os dois cenários gráficos em cada arquitetura, frames inspecionados, queda/travamento recuperados, logs e hashes da revisão efetivamente testada. Registrar limitações e falhas encontradas antes de atualizar a [matriz](acceptance.md).
 
-Pi 5 físico, rootfs imutável, `/data`, recuperação de energia, autenticação e ELO Server continuam em seus gates próprios. Esta sequência não grava mídia nem modifica o perfil físico.
+Rootfs RO e `/data` têm agora perfis `-appliance` e [roteiro próprio](appliance-validation.md); os perfis P2 deste documento preservam suas características. Pi 5 físico, recuperação de energia, autenticação e ELO Server continuam em seus gates próprios. Esta sequência não grava mídia nem modifica o perfil físico.

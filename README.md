@@ -2,7 +2,7 @@
 
 > Faça simples. Depois deixe mais leve. **Sempre pronto. Sempre incompleto.**
 
-**Versão de projeto:** `v0.1.0` · **Estado:** console e apresentação gráfica QEMU x86_64/ARM64 demonstrados; Pi 5 físico pendente · **Hardware:** Raspberry Pi 5, ARM64
+**Versão de projeto:** `v0.1.0` · **Estado:** console, GUI e fundação de appliance RO + dados persistentes demonstrados em QEMU x86_64/ARM64; Pi 5 físico adiado · **Hardware:** Raspberry Pi 5, ARM64
 
 O ELO/OS é uma árvore `br2-external` do Buildroot para compor uma distribuição-appliance Linux mínima. **Não é outro kernel**, nem o ELO Server, nem a aplicação ELO existente. A imagem Pi 5 foi compilada; a base x86_64 iniciou em QEMU com KVM e TCG, e a base ARM64 `virt` iniciou com TCG. Há uma apresentação local experimental em C++/Qt Quick, independente da rede. **Não afirma funcionamento gráfico nem confiabilidade homologados no hardware.**
 
@@ -16,7 +16,7 @@ O ELO/OS é uma árvore `br2-external` do Buildroot para compor uma distribuiç�
 ## Árvore
 
 - `docs/`: constituição e ADRs versionados; critérios de aceitação.
-- `configs/`: perfis de console Pi 5/x86_64/ARM64 e dois perfis gráficos QEMU isolados.
+- `configs/`: três perfis de console, dois gráficos P2 e dois appliances virtuais isolados.
 - `board/elo/common/`: arquivos compartilhados; `board/elo/<perfil>/`: identidade e ajustes por plataforma.
 - `package/elo-client/`: núcleo portátil C++ e apresentação Qt/QML **opcional, fora das imagens P1 de console**.
 - `scripts/`: build, diagnóstico e inventário da imagem.
@@ -41,7 +41,7 @@ O comando `./scripts/build.sh` cria `.cache/buildroot-2026.08.1/`, configura `ou
 
 A imagem Pi 5 foi gerada e inspecionada; seu boot físico permanece pendente. A primeira imagem **não habilita o cliente Qt**: é uma base Pi 5 com identidade ELO/OS. Validar boot e console antes de adicionar a interface gráfica. Os arquivos `board/elo/pi5/genimage.cfg`, `post-image.sh` e `package/elo-client/` estão preparados para fases futuras e **não devem ser interpretados como integração homologada**.
 
-Próxima etapa: executar `python3 scripts/pi5-preflight.py` no Fedora e seguir o [roteiro de primeiro boot físico](tests/boot/pi5-first-boot.md). A checagem compara a imagem histórica com seu hash registrado e inspeciona partições e assinaturas sem gravar mídia. O [modelo de evidência](tests/boot/pi5-evidence-template.md) prepara o registro do primeiro boot e das 30 partidas.
+Ensaios físicos adiados pelo mantenedor em 2026-11-09. Quando retomados, executar `python3 scripts/pi5-preflight.py` no Fedora e seguir o [roteiro de primeiro boot físico](tests/boot/pi5-first-boot.md). A checagem compara a imagem histórica com seu hash registrado e inspeciona partições e assinaturas sem gravar mídia. O [modelo de evidência](tests/boot/pi5-evidence-template.md) prepara o registro do primeiro boot e das 30 partidas.
 
 ### Segundo marco: P2, apresentação local
 
@@ -59,6 +59,12 @@ No Fedora com dependências Qt de desenvolvimento disponíveis:
 Build nativo em `build/client-fedora/`, separado do Buildroot. O padrão é C++23 portátil; C++26 é um perfil experimental explícito, avaliado pelo código e testes reais. Consulte o [contrato e comandos de teste do cliente](tests/client/README.md) e a [decisão arquitetural](docs/adr/ADR-009-local-client.md).
 
 Para a bancada gráfica, use `PROFILE=qemu-x86_64-gui` ou `PROFILE=qemu-aarch64-gui` com `scripts/build.sh` e `scripts/run-qemu.sh`. Cada perfil tem saída própria em `output/`, Qt Quick por software, LinuxFB/DRM, VirtIO GPU e apresentação em tela cheia. O teste `tests/client/qemu-gui-smoke.py` cobre partida sem NIC, framebuffer/teclado e recuperação de processo; o cenário `QEMU_GUI_NETWORK=user` verifica perda/reconexão do link. Ambos passaram nas duas arquiteturas. No desktop Toolbox, exporte primeiro o perfil escolhido em `PROFILE` e informe também `OUTPUT_DIR="$PWD/output/toolbox/$PROFILE"`. Essa pilha não comprova EGLFS/V3D na Pi 5; não habilite o cliente no perfil físico antes de configurar e validar sua pilha gráfica.
+
+### Construção integral: appliance virtual
+
+O [plano IMPL-003](docs/ELO-OS-IMPL-003_v0.1.0.md) organiza fundação, identidade/isolamento, conteúdo e eventos duráveis, servidor, atualizações e operação. Contrato e integração de distribuição Thin Client ainda serão definidos; as rotas ilustrativas não representam integração existente.
+
+Novos perfis `qemu-x86_64-appliance` e `qemu-aarch64-appliance` acrescentam raiz somente leitura, temporários em RAM e disco `/data` independente. A interface confirma apresentação antes da rede; disco ausente ou inválido recebe diagnóstico explícito. **I1 passou nas duas arquiteturas:** seis cenários GUI e 16 boots de recuperação, incluindo SIGKILL da VM, staging, ENOSPC e dados inválidos. Consulte [evidência I1](docs/evidence/I1-APPLIANCE-20261109.md), [compilação, disco virtual e testes](docs/tests/appliance-validation.md) e [aceitação](docs/tests/acceptance.md). Conteúdo persistente, fila durável, identidade/TLS e atualização têm etapas próprias; a fixture incorporada permanece apresentação de bancada.
 
 ### Desenvolvimento no Fedora com QEMU
 
@@ -106,7 +112,7 @@ QEMU_ACCEL=kvm python3 tests/boot/qemu-smoke.py
 QEMU_ACCEL=tcg python3 tests/boot/qemu-smoke.py
 ```
 
-Q0 verifica estrutura, sintaxe e Kconfig dos cinco perfis, sem compilar ou inicializar imagens. Q1 executa duas sessões reais no perfil escolhido, incluindo PID 1, console, ext4, DHCP, shutdown, estabilidade do login e hashes antes/depois. Logs e relatórios JSON ficam em `output/<perfil>/qemu-smoke-*`; timeout/falha produz código diferente de zero. Os testes devem rodar após o build, sem outra VM ou build no mesmo diretório de saída.
+Q0 verifica estrutura, sintaxe e Kconfig dos sete perfis, sem compilar ou inicializar imagens. Q1 executa duas sessões reais no perfil escolhido, incluindo PID 1, console, ext4, DHCP, shutdown, estabilidade do login e hashes antes/depois. Logs e relatórios JSON ficam em `output/<perfil>/qemu-smoke-*`; timeout/falha produz código diferente de zero. Os testes devem rodar após o build, sem outra VM ou build no mesmo diretório de saída.
 
 O [plano P1](docs/ELO-OS-IMPL-001_v0.1.1.md), sua [revisão](docs/tests/implementation-review.md) e o [roteiro físico](tests/boot/pi5-first-boot.md) separam os resultados virtuais dos ensaios de hardware. O [IMPL-002](docs/ELO-OS-IMPL-002_v0.1.0.md) foi preservado como plano P2; sua [revisão de escopo](docs/tests/p2-client-review.md) e a [evidência do cliente](docs/evidence/P2-CLIENT-20261108.md) distinguem o que já foi testado das etapas futuras de persistência, servidor e supervisão.
 

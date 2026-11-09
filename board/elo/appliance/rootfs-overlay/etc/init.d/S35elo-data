@@ -1,0 +1,76 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-only
+# Virtual appliance only. Never formats a disk or falls back to rootfs writes.
+set -uf
+umask 077
+runtime=/run/elo-storage
+device=/dev/vdb
+marker=/data/.elo-layout
+temporary=
+mkdir -p "$runtime" || exit 1
+exec 9> "$runtime/lock"
+flock -n 9 || exit 0
+status() {
+    printf 'ELO_STORAGE_V1 %s %s\n' "$1" "$2" > "$runtime/.status" || exit 1
+    mv -f "$runtime/.status" "$runtime/status" || exit 1
+    echo "elo-storage state=$1 reason=$2"
+}
+fail() {
+    [ -z "$temporary" ] || rm -f "$temporary"
+    # Do not leave a partially initialized store advertised as writable/ready.
+    if mountpoint -q /data; then umount /data || :; fi
+    status UNAVAILABLE "$1"
+    exit 1
+}
+case "${1:-}" in
+  start)
+    if mountpoint -q /data; then
+        echo 'elo-storage: /data already mounted; refusing to adopt it' >&2
+        exit 1
+    fi
+    status INITIALIZING CHECKING_DEVICE
+    for attempt in 1 2 3 4 5; do
+        [ ! -b "$device" ] || break
+        sleep 0.1
+    done
+    [ -b "$device" ] || fail MISSING_DEVICE
+    metadata=$(blkid "$device") || fail UNRECOGNIZED_DEVICE
+    case "$metadata" in *'LABEL="ELO_DATA"'*) ;; *) fail WRONG_LABEL ;; esac
+    case "$metadata" in *'TYPE="ext4"'*) ;; *) fail WRONG_FILESYSTEM ;; esac
+    mount -t ext4 -o rw,nosuid,nodev,noexec "$device" /data || fail MOUNT_FAILED
+    if [ -L "$marker" ] || { [ -e "$marker" ] && [ ! -f "$marker" ]; }; then
+        fail INVALID_LAYOUT
+    fi
+    if [ -e "$marker" ]; then
+        [ "$(stat -c %s "$marker")" = 12 ] || fail LAYOUT_VERSION
+        [ "$(cat "$marker")" = ELO_DATA_V1 ] || fail LAYOUT_VERSION
+    fi
+    for name in device content queue state; do
+        path=/data/$name
+        [ ! -L "$path" ] || fail INVALID_LAYOUT
+        if [ -e "$path" ] && [ ! -d "$path" ]; then fail INVALID_LAYOUT; fi
+    done
+    for name in device content queue state; do
+        path=/data/$name
+        mkdir -p "$path" && chown 0:0 "$path" && chmod 0700 "$path" && fsync "$path" || fail INITIALIZATION_FAILED
+    done
+    chown 0:0 /data && chmod 0700 /data || fail INITIALIZATION_FAILED
+    if [ ! -e "$marker" ]; then
+        temporary=$(mktemp /data/.elo-layout.XXXXXXXX) || fail INITIALIZATION_FAILED
+        printf 'ELO_DATA_V1\n' > "$temporary" || fail INITIALIZATION_FAILED
+        fsync "$temporary" || fail DURABILITY_UNCERTAIN
+        mv -f "$temporary" "$marker" || fail INITIALIZATION_FAILED
+        temporary=
+    fi
+    fsync "$marker" && fsync /data || fail DURABILITY_UNCERTAIN
+    status READY MOUNTED
+    ;;
+  stop)
+    if mountpoint -q /data; then
+        # umount performs filesystem synchronization and reports failure.
+        umount /data || { status UNAVAILABLE UNMOUNT_FAILED; exit 1; }
+    fi
+    status STOPPED UNMOUNTED
+    ;;
+  *) echo "Usage: $0 {start|stop}" >&2; exit 2 ;;
+esac

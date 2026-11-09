@@ -1,0 +1,26 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-only
+export HOME=/run/elo-client
+export XDG_CACHE_HOME=/run/elo-client/cache
+export XDG_CONFIG_HOME=/run/elo-client/config
+if [ "${1:-}" = start ]; then
+    /usr/libexec/elo-client-service start || exit 1
+    # rcS starts networking only after this service returns. Confirm a real
+    # rendered local presentation first, rather than just the supervisor PID.
+    for attempt in $(seq 1 50); do
+        if [ -s /run/elo-client/health ]; then
+            read -r magic token pid stamp sequence state page digest < /run/elo-client/health
+            if [ "$magic" = ELO_HEALTH_V1 ]; then
+                case "$state" in READY_LOCAL|DEGRADED_OFFLINE)
+                    echo 'elo-boot presentation-ready-before-network'
+                    exit 0
+                    ;;
+                esac
+            fi
+        fi
+        sleep 0.2
+    done
+    echo 'elo-boot: presentation not ready before network startup deadline' >&2
+    exit 1
+fi
+exec /usr/libexec/elo-client-service "$@"

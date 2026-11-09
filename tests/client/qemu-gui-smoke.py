@@ -60,14 +60,22 @@ class Qmp:
 
 def main():
     profile = os.environ.get('PROFILE', 'qemu-x86_64-gui')
-    if profile not in ('qemu-x86_64-gui', 'qemu-aarch64-gui'):
-        raise SystemExit('PROFILE deve ser qemu-x86_64-gui ou qemu-aarch64-gui')
+    if profile not in ('qemu-x86_64-gui', 'qemu-aarch64-gui',
+                       'qemu-x86_64-appliance', 'qemu-aarch64-appliance'):
+        raise SystemExit('PROFILE deve ser um perfil QEMU -gui ou -appliance')
+    appliance = profile.endswith('-appliance')
+    storage_expected = os.environ.get('QEMU_STORAGE_EXPECT', 'READY')
+    if appliance and storage_expected not in ('READY', 'UNAVAILABLE'):
+        raise SystemExit('QEMU_STORAGE_EXPECT deve ser READY ou UNAVAILABLE')
     arch = 'aarch64' if 'aarch64' in profile else 'x86_64'
     network_mode = os.environ.get('QEMU_GUI_NETWORK', 'off')
     if network_mode not in ('off', 'user'):
         raise SystemExit('QEMU_GUI_NETWORK deve ser off ou user')
     prefix = 'gui-smoke' if network_mode == 'off' else 'gui-smoke-network'
     frame_prefix = 'gui' if network_mode == 'off' else 'gui-network'
+    if appliance and storage_expected == 'UNAVAILABLE':
+        prefix += '-no-data'
+        frame_prefix += '-no-data'
     out = Path(os.environ.get('OUTPUT_DIR', ROOT / 'output' / profile)).resolve()
     kernel = 'Image' if arch == 'aarch64' else 'bzImage'
     images = [out / 'images' / name for name in (kernel, 'rootfs.ext4')]
@@ -85,7 +93,9 @@ def main():
     deadline = started + float(os.environ.get('QEMU_BOOT_TIMEOUT', '240'))
     proc = None
     qmp = None
-    with tempfile.TemporaryDirectory(prefix='elo-gui-') as temp, (out / f'{prefix}.log').open('wb') as log:
+    with (tempfile.TemporaryDirectory(prefix='elo-gui-') as temp,
+          (out / f'{prefix}.log').open('wb') as log,
+          (out / f'{prefix}-qemu.log').open('wb') as diagnostics):
         path = Path(temp) / 'qmp.sock'
         env = {**os.environ, 'PROFILE': profile, 'QEMU_NETWORK': network_mode, 'QEMU_DISPLAY': 'none'}
         buffer = b''
@@ -164,9 +174,14 @@ def main():
             report['qemu_version'] = subprocess.check_output([emulator, '--version'], text=True).splitlines()[0]
             proc = subprocess.Popen([str(ROOT / 'scripts/run-qemu.sh'), '-qmp',
                                      f'unix:{path},server=on,wait=off'], env=env,
-                                    stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                                    stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=diagnostics)
             report['host_qemu_pid'] = proc.pid
-            wait_for(rb'elo-os login: ')
+            _, boot_trace = wait_for(rb'elo-os login: ')
+            if appliance:
+                marker = b'elo-boot presentation-ready-before-network'
+                if marker not in boot_trace or boot_trace.index(marker) > boot_trace.index(b'Starting network:'):
+                    raise RuntimeError('Apresentação local antes da rede não demonstrada')
+                report['checks'].append('presentation-before-network')
             send('root')
             wait_for(rb'# ')
             send('stty -echo')
@@ -181,6 +196,31 @@ def main():
                     or not re.search(r'(?m)^\S+ / ext4 ', result)):
                 raise RuntimeError('BusyBox init e raiz ext4 não demonstrados')
             report['guest_init_mounts'] = result
+            if appliance:
+                report['image_build_info'] = json.loads(command('image-build-info', 'cat /etc/elo-build.json'))
+                if (report['image_build_info'].get('profile') != profile or
+                        report['image_build_info'].get('config_sha256') != report['config_sha256']):
+                    raise RuntimeError('Proveniência da imagem não corresponde ao perfil/configuração')
+                root_mount = re.search(r'(?m)^\S+ / ext4 (\S+) ', result)
+                if not root_mount or 'ro' not in root_mount[1].split(','):
+                    raise RuntimeError('Raiz appliance não está somente leitura')
+                command('root-rejects-write', 'test ! -e /etc/.elo-ro-probe && ! touch /etc/.elo-ro-probe')
+                report['storage_status'] = command('storage-status', 'cat /run/elo-storage/status')
+                if not re.search(rf'(?m)^ELO_STORAGE_V1 {storage_expected} \S+$', report['storage_status']):
+                    raise RuntimeError('Estado de armazenamento inesperado')
+                if storage_expected == 'READY':
+                    report['storage_mounts'] = command('persistent-data-mount',
+                        'grep " /data ext4 " /proc/mounts; '
+                        'test "$(cat /data/.elo-layout)" = ELO_DATA_V1 && '
+                        'test "$(stat -c %a /data/device)" = 700 && '
+                        'test "$(stat -c %a /data/content)" = 700 && '
+                        'test "$(stat -c %a /data/queue)" = 700 && '
+                        'test "$(stat -c %a /data/state)" = 700')
+                    data_mount = re.search(r'(?m)^\S+ /data ext4 (\S+) ', report['storage_mounts'])
+                    if not data_mount or not {'rw', 'nosuid', 'nodev', 'noexec'} <= set(data_mount[1].split(',')):
+                        raise RuntimeError('Opções de isolamento de /data ausentes')
+                else:
+                    command('no-rootfs-storage-fallback', '! mountpoint -q /data && ! touch /data/.elo-ro-probe')
             if network_mode == 'off':
                 # CONFIG_IPV6_SIT creates a dormant sit0 even with QEMU -nic none.
                 # Check device-backed NICs and routes, rather than interface names.
@@ -291,7 +331,9 @@ def main():
                 proc.stdout.close()
             report['hashes_after'] = {p.name: digest(p) for p in images}
             log.flush()
-            match = re.search(rb'ACCEL=(\w+)', (out / f'{prefix}.log').read_bytes())
+            diagnostics.flush()
+            report['qemu_diagnostics'] = f'{prefix}-qemu.log'
+            match = re.search(rb'ACCEL=(\w+)', (out / f'{prefix}-qemu.log').read_bytes())
             report['qemu_acceleration'] = match[1].decode() if match else 'NOT_RECORDED'
             report['duration_seconds'] = round(time.monotonic() - started, 3)
             if report['hashes_before'] != report['hashes_after']:

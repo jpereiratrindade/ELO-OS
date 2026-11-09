@@ -1,0 +1,5 @@
+# Explicit durability and filesystem metadata tools for virtual appliance data.
+CONFIG_FSYNC=y
+CONFIG_FEATURE_BLKID_TYPE=y
+CONFIG_STAT=y
+CONFIG_FEATURE_STAT_FORMAT=y

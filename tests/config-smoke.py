@@ -11,7 +11,9 @@ PROFILES = {"pi5": ("elo_pi5_defconfig", "aarch64", None),
             "qemu-x86_64": ("elo_qemu_x86_64_defconfig", "x86_64", "ttyS0"),
             "qemu-aarch64": ("elo_qemu_aarch64_defconfig", "aarch64", "ttyAMA0"),
             "qemu-x86_64-gui": ("elo_qemu_x86_64_gui_defconfig", "x86_64", "ttyS0"),
-            "qemu-aarch64-gui": ("elo_qemu_aarch64_gui_defconfig", "aarch64", "ttyAMA0")}
+            "qemu-aarch64-gui": ("elo_qemu_aarch64_gui_defconfig", "aarch64", "ttyAMA0"),
+            "qemu-x86_64-appliance": ("elo_qemu_x86_64_appliance_defconfig", "x86_64", "ttyS0"),
+            "qemu-aarch64-appliance": ("elo_qemu_aarch64_appliance_defconfig", "aarch64", "ttyAMA0")}
 
 
 def main():
@@ -39,13 +41,22 @@ def main():
             for line in expected:
                 if line not in text.splitlines():
                     raise RuntimeError(f"{profile}: símbolo perdido pelo Kconfig: {line}")
-            gui = profile.endswith("-gui")
+            appliance = profile.endswith("-appliance")
+            gui = profile.endswith("-gui") or appliance
             if gui:
                 for line in ("BR2_PACKAGE_ELO_CLIENT=y", "BR2_PACKAGE_QT6BASE_LINUXFB=y",
                              "BR2_PACKAGE_QT6DECLARATIVE_QUICK=y", "BR2_PACKAGE_LIBDRM=y",
                              "BR2_PACKAGE_DEJAVU_SANS=y", 'BR2_TARGET_ROOTFS_EXT2_SIZE="256M"'):
                     if line not in text.splitlines():
                         raise RuntimeError(f"{profile}: requisito gráfico perdido: {line}")
+            if appliance:
+                if '# BR2_TARGET_GENERIC_REMOUNT_ROOTFS_RW is not set' not in text.splitlines():
+                    raise RuntimeError(f'{profile}: rootfs deve permanecer somente leitura')
+                for symbol, suffix in [('BR2_PACKAGE_BUSYBOX_CONFIG_FRAGMENT_FILES', 'busybox.fragment'),
+                                       ('BR2_ROOTFS_POST_BUILD_SCRIPT', 'post-build.sh')]:
+                    if not any(line.startswith(symbol + '=') and f'/board/elo/appliance/{suffix}' in line
+                               for line in text.splitlines()):
+                        raise RuntimeError(f'{profile}: integração appliance ausente: {symbol}')
             forbidden = ["BR2_PACKAGE_OPENSSH=y", "BR2_PACKAGE_DROPBEAR=y", "BR2_PACKAGE_SUDO=y"]
             if gui:
                 forbidden += ["BR2_PACKAGE_QT6BASE_NETWORK=y", "BR2_PACKAGE_QT6BASE_OPENGL=y",

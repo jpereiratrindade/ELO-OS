@@ -28,7 +28,7 @@ jobs:
           ref: 7fdeadb3b9f12f78e5fccca914d7fef47090ab9a # 2026.08.1
           path: .cache/buildroot-2026.08.1
           persist-credentials: false
-      - name: Q0 - load console and GUI Kconfig profiles without building images
+      - name: Q0 - load console, GUI and appliance Kconfig profiles without building images
         run: python3 tests/config-smoke.py
   client-core:
     runs-on: ubuntu-24.04

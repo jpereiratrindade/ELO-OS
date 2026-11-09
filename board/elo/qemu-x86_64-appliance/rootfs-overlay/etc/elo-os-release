@@ -1,0 +1,4 @@
+NAME="ELO/OS"
+VERSION="0.1.0"
+STATUS="development"
+PLATFORM="qemu-x86_64-appliance"
