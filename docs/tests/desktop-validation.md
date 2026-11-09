@@ -1,8 +1,8 @@
-# P2 — próxima compilação no desktop
+# P2 — compilação e validação no desktop
 
-Por orientação do mantenedor, a compilação gráfica do laptop foi encerrada e seu cache preservado. Esta entrega acrescenta código e testes, sem executar compiladores C++, Qt ou Buildroot. O commit usa `[skip ci]` para adiar também os jobs remotos de compilação; a configuração do workflow continua disponível. O GitHub permite executar depois o workflow manualmente, inclusive nessa revisão ([documentação](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/skip-workflow-runs)).
+Em 2026-11-09, a compilação foi retomada no desktop Fedora Silverblue 44, em Toolbox dedicada, com 32 jobs. Cliente nativo, sessão gráfica Fedora e dois cenários gráficos por arquitetura passaram: [x86_64/KVM](../evidence/P2-DESKTOP-X86-20261109.md) e [ARM64/TCG](../evidence/P2-DESKTOP-AARCH64-20261109.md). Núcleo ARM64 passou em C++23 e no subconjunto experimental C++26.
 
-Os PASS anteriores pertencem às fontes/artefatos registrados nas evidências P1 e na fonte `202ab1d` do cliente. Eles não validam os novos adaptadores Qt, contratos de eventos ou a imagem gráfica desta entrega.
+O build do laptop havia sido encerrado por orientação do mantenedor, com cache preservado e CI de compilação adiada por `[skip ci]`. Os PASS históricos permanecem vinculados às fontes/artefatos das evidências P1 e `202ab1d`; os novos resultados nativos/x86_64/ARM64 pertencem à fonte `c456f0b` e ao harness corrigido registrados nas evidências do desktop.
 
 ## Preparação
 
@@ -14,13 +14,40 @@ Para cada perfil virtual, `PROFILE=<perfil> ./scripts/doctor.sh` verifica as fer
 
 ## 1. Verificações sem build e compilação nativa
 
+### Fedora Silverblue / Toolbox
+
+A bancada atual usa `toolbox enter elo-os`. Para criar outra bancada, `toolbox create --release 44 elo-os`. Instale dentro dela as ferramentas de desenvolvimento e módulos necessários; no desktop, a instalação foi feita apenas no container:
+
+```bash
+sudo dnf install git make gcc gcc-c++ python3 rsync tar gawk sed xz gzip bzip2 \
+  patch cpio unzip file wget bc which diffutils findutils \
+  perl-English perl-ExtUtils-MakeMaker perl-Thread-Queue perl-FindBin \
+  perl-IPC-Cmd perl-Data-Dumper perl-Time-Piece cmake ninja-build pkgconf-pkg-config \
+  qt6-qtbase-devel qt6-qtdeclarative-devel \
+  qemu-system-x86-core qemu-system-aarch64-core qemu-user-static-aarch64 \
+  qemu-device-display-virtio-gpu qemu-device-display-virtio-gpu-pci qemu-ui-gtk
+```
+
+O proxy salvo no GNOME não implica variáveis de proxy no terminal/container. Confira acesso aos repositórios na própria Toolbox e configure o proxy localmente quando necessário, sem versionar credenciais. Nesta rodada, proxy explícito recebeu 403 e os downloads funcionaram sem proxy explícito.
+
+Os comandos seguintes rodam dentro da Toolbox a partir da raiz do checkout. Para usar os artefatos desta bancada, exporte:
+
+```bash
+export CLIENT_BUILD_DIR="$PWD/build/client-toolbox"
+export OUTPUT_DIR="$PWD/output/toolbox/qemu-x86_64-gui"
+```
+
+Use `CLIENT_BUILD_DIR` como diretório `-B`/`--test-dir` do exemplo nativo abaixo. Para abrir o cliente nativo já preparado: `CLIENT_BUILD_DIR="$PWD/build/client-toolbox" JOBS=32 ./scripts/run-client.sh`.
+
+`OUTPUT_DIR` vale para build, inspeção, lançador e smoke. No build x86 do desktop, a configuração local também usa `BR2_JLEVEL=32`. Ao passar para ARM64, troque `OUTPUT_DIR` por `"$PWD/output/toolbox/qemu-aarch64-gui"`; não reutilize a saída x86. Downloads em `.cache/buildroot-2026.08.1/dl/` podem ser compartilhados; saídas de host e Toolbox permanecem separadas.
+
 Os comandos abaixo são para o operador executar no desktop, em sequência:
 
 ```bash
 ./tests/smoke.sh
 cmake -S package/elo-client/src -B build/client-fedora -G Ninja \
   -DELO_BUILD_TESTS=ON -DELO_CXX_STANDARD=23 -DCMAKE_BUILD_TYPE=Release
-cmake --build build/client-fedora --parallel 4
+cmake --build build/client-fedora --parallel 32
 QT_QUICK_BACKEND=software ctest --test-dir build/client-fedora --output-on-failure
 QT_QUICK_BACKEND=software build/client-fedora/elo-client
 ```
@@ -50,37 +77,38 @@ ELO_RUNTIME_DIR="$PWD/output/client-supervisor" QT_QUICK_BACKEND=software \
   "$PWD/build/client-fedora/elo-client"
 ```
 
-Em outro terminal, leia `output/client-supervisor/child.pid`, envie SIGKILL e depois SIGSTOP ao filho de cada geração e registre novo PID, nova geração, frames e estado. Encerre o **supervisor** por SIGTERM e confira remoção dos registros e ausência do filho. O teste automatizado de shell usa um processo simulado e já passou; a prova com Qt real ainda precisa ser produzida.
+Em outro terminal, leia `output/client-supervisor/child.pid`, envie SIGKILL e depois SIGSTOP ao filho de cada geração e registre novo PID, nova geração, frames e estado. Encerre o **supervisor** por SIGTERM e confira remoção dos registros e ausência do filho. O teste automatizado de shell usa processo simulado; a prova adicional com Qt real passou no desktop, e as imagens x86_64/ARM64 exercitaram a política padrão. Os métodos e limites estão nas evidências vinculadas acima.
 
 ## 3. Imagem gráfica x86_64
 
 ```bash
 PROFILE=qemu-x86_64-gui ./scripts/doctor.sh
-PROFILE=qemu-x86_64-gui JOBS=4 ./scripts/build.sh
+PROFILE=qemu-x86_64-gui JOBS=32 ./scripts/build.sh
 # Somente após make retornar zero, sem outro build/VM no mesmo output:
 PROFILE=qemu-x86_64-gui python3 tests/client/qemu-gui-smoke.py
 PROFILE=qemu-x86_64-gui QEMU_GUI_NETWORK=user python3 tests/client/qemu-gui-smoke.py
 ```
 
-O primeiro ensaio inicia sem NIC; o segundo inicia com DHCP, derruba/restaura o link pelo QMP e exige a mesma página/conteúdo. Ambos testam SIGKILL, SIGSTOP, nova geração do cliente, retorno da fixture inicial, supervisor sobrevivente e desligamento. A retomada após falha começa na primeira página; posição de navegação não é persistida.
+O primeiro ensaio inicia sem NIC ligada a dispositivo e sem rotas IPv4; um túnel inativo `sit0` criado pelo kernel é permitido. O segundo inicia com DHCP, derruba/restaura o link pelo QMP e exige a mesma página/conteúdo. Ambos testam SIGKILL, SIGSTOP, nova geração do cliente, retorno da fixture inicial, supervisor sobrevivente e desligamento. A retomada após falha começa na primeira página; posição de navegação não é persistida.
 
 Relatórios separados: `gui-smoke.json` e `gui-smoke-network.json`, respectivos logs e frames PPM em `output/qemu-x86_64-gui/`. Revise visualmente as capturas. Os relatórios incluem hashes antes/depois, identidade, bibliotecas Qt e saúde da apresentação. `QEMU_BOOT_TIMEOUT=360` pode ajustar o limite total do ensaio se necessário.
 
 ## 4. ARM64
 
-Repita os mesmos dois ensaios após construir `PROFILE=qemu-aarch64-gui`, usando `qemu-system-aarch64` do desktop. O lançador usa TCG neste perfil. Depois do build, a toolchain desse perfil permite testar isoladamente o núcleo. Com QEMU user `qemu-aarch64` instalado (ou substituindo pelo executável `qemu-aarch64-static` disponível):
+Repita os mesmos dois ensaios após construir `PROFILE=qemu-aarch64-gui`, usando `qemu-system-aarch64` do desktop. Na Toolbox, exporte primeiro `OUTPUT_DIR="$PWD/output/toolbox/qemu-aarch64-gui"` para build, inspeção, lançador e testes. O lançador usa TCG neste perfil. A toolchain instalada desse perfil permite testar isoladamente o núcleo em outro diretório. O exemplo usa `qemu-aarch64-static`; `QEMU_USER=qemu-aarch64` seleciona a alternativa dinâmica quando instalada:
 
 ```bash
+ARM_GUI_OUT=${OUTPUT_DIR:-"$PWD/output/qemu-aarch64-gui"}
 cmake -S package/elo-client/src -B build/client-aarch64-core \
   -DELO_BUILD_GUI=OFF -DELO_BUILD_TESTS=ON -DELO_CXX_STANDARD=23 \
   -DCMAKE_BUILD_TYPE=Release -DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
-  -DCMAKE_CXX_COMPILER="$PWD/output/qemu-aarch64-gui/host/bin/aarch64-linux-g++" \
-  -DCMAKE_CROSSCOMPILING_EMULATOR="qemu-aarch64;-L;$PWD/output/qemu-aarch64-gui/host/aarch64-buildroot-linux-gnu/sysroot"
+  -DCMAKE_CXX_COMPILER="$ARM_GUI_OUT/host/bin/aarch64-linux-g++" \
+  -DCMAKE_CROSSCOMPILING_EMULATOR="${QEMU_USER:-qemu-aarch64-static};-L;$ARM_GUI_OUT/host/aarch64-buildroot-linux-gnu/sysroot"
 cmake --build build/client-aarch64-core --parallel 4
 ctest --test-dir build/client-aarch64-core --output-on-failure
 ```
 
-Essa recompilação também está pendente para o código novo. O experimento C++26 usa outro diretório e `-DELO_CXX_STANDARD=26`; não muda o padrão principal nem comprova recursos fora do subconjunto usado.
+Essa recompilação passou no desktop, nos diretórios `build/client-aarch64-core-toolbox-cxx23` e `build/client-aarch64-core-toolbox-cxx26`. O experimento C++26 usa outro diretório e `-DELO_CXX_STANDARD=26`; não muda o padrão principal nem comprova recursos fora do subconjunto usado.
 
 ## Aceitação
 

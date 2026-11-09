@@ -1,6 +1,6 @@
 # ELO/OS — aceitação por perfil e artefato
 
-Versão do projeto: **0.1.0**. Estado em 2026-11-08: imagem Pi 5 compilada, console x86_64 verificado em QEMU, console ARM64 `virt` verificado com TCG. Build, boot, teste e homologação são estados distintos.
+Versão do projeto: **0.1.0**. Estado em 2026-11-09: imagem Pi 5 compilada, consoles x86_64/ARM64 e imagens gráficas x86_64/KVM e ARM64/TCG verificados em QEMU. Build, boot, teste e homologação são estados distintos.
 
 | Marco/gate | Plataforma e escopo | Estado | Evidência |
 | --- | --- | --- | --- |
@@ -11,13 +11,13 @@ Versão do projeto: **0.1.0**. Estado em 2026-11-08: imagem Pi 5 compilada, cons
 | P1-D / Q1A | Boot ARM64 QEMU `virt` em TCG | PASS — BOOTED_QEMU_AARCH64, Q1A | [Evidência ARM64](../evidence/P1-QEMU-AARCH64-20261108.md), fonte `3737a9c`, dois boots e hashes |
 | P1-E / Q2 | Boot e console físico Raspberry Pi 5 | NOT TESTED | [Roteiro físico](../../tests/boot/pi5-first-boot.md) |
 | P1-F | 30 partidas físicas | NOT TESTED | Registro de ciclos ainda vazio |
-| P2-C0 | Núcleo C++23 sem Qt, fixture, eventos offline e falhas injetadas | PASS histórico 202ab1d; acréscimos atuais NOT TESTED | [Evidência cliente](../evidence/P2-CLIENT-20261108.md); portas/ledger aguardam recompilação |
-| P2-HGUI | Qt/QML no Fedora, apresentação e entrada reais | PASS histórico 202ab1d; acréscimos atuais NOT TESTED | [Evidência cliente](../evidence/P2-CLIENT-20261108.md); conectividade, retry, store e saúde novos aguardam desktop |
-| P2-A64 | Núcleo AArch64, C++23 e experimento C++26 | PASS histórico — espaço de usuário; revisão atual NOT TESTED | [Evidência cliente](../evidence/P2-CLIENT-20261108.md); não é GPU/kernel |
+| P2-C0 | Núcleo C++23 sem dependência Qt, fixture, eventos offline e falhas injetadas | PASS desktop, fonte c456f0b | [Evidência desktop](../evidence/P2-DESKTOP-X86-20261109.md); portas e ledger exercitados pelo contrato do núcleo |
+| P2-HGUI | Qt/QML no Fedora, apresentação e entrada reais | PASS desktop offscreen e sessão gráfica xcb, fonte c456f0b | [Evidência desktop](../evidence/P2-DESKTOP-X86-20261109.md); conectividade, retry, store, saúde e captura da sessão GNOME/Wayland via Xwayland |
+| P2-A64 | Núcleo AArch64, C++23 e experimento C++26 | PASS espaço de usuário, fonte c456f0b | [Evidência ARM64 desktop](../evidence/P2-DESKTOP-AARCH64-20261109.md); contratos e três páginas nos dois padrões; C++26 apenas no subconjunto usado |
 | P2-STORE-HOST | Publicação atômica de fixture em diretório descartável | PASS protótipo host | [Evidência local](../evidence/P2-LOCAL-PROTOTYPES-20261108.md); não prova energia nem `/data` |
-| P2-SUP-HOST | Supervisor com processo simulado, queda/travamento e backoff | PASS protótipo host | [Evidência local](../evidence/P2-LOCAL-PROTOTYPES-20261108.md); não é aplicação Qt real |
-| P2-EVENTMODEL | Ledger C++ em memória e idempotência local | IMPLEMENTED / NOT TESTED | Fonte/testes preparados; sem transporte ou persistência |
-| P2-QGUI | Qt Quick, VirtIO GPU, offline/reconexão e recuperação nas imagens | NOT TESTED | Build do laptop interrompido a pedido; [próxima validação no desktop](desktop-validation.md) |
+| P2-SUP-HOST | Supervisor, queda/travamento e backoff | PASS processo simulado e Qt real offscreen | [Evidência desktop](../evidence/P2-DESKTOP-X86-20261109.md); política reduzida no host, política padrão nas imagens x86/ARM64 |
+| P2-EVENTMODEL | Ledger C++ em memória e idempotência local | PASS nativo C++23, fonte c456f0b | [Evidência desktop](../evidence/P2-DESKTOP-X86-20261109.md); sem transporte ou persistência |
+| P2-QGUI | Qt Quick, VirtIO GPU, offline/reconexão e recuperação nas imagens | PASS virtual — x86_64/KVM e ARM64/TCG | [x86_64](../evidence/P2-DESKTOP-X86-20261109.md), [ARM64](../evidence/P2-DESKTOP-AARCH64-20261109.md); dois cenários por arquitetura, frames, SIGKILL/SIGSTOP e hashes |
 | P2-PI5 | Qt6/QML, DRM/KMS e periféricos físicos | NOT TESTED | Não habilitado na imagem Pi 5 histórica |
 | P3 | ELO Server/Thin Client, HTTPS, cache e offline | NOT TESTED | Contratos futuros |
 | P4 | Rootfs RO, `/data`, energia e recuperação | NOT IMPLEMENTED | ADR-004/005 propostos; hoje rootfs virtual é RW com snapshot no host |

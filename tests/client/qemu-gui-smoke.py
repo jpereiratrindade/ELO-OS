@@ -182,7 +182,12 @@ def main():
                 raise RuntimeError('BusyBox init e raiz ext4 não demonstrados')
             report['guest_init_mounts'] = result
             if network_mode == 'off':
-                command('offline-no-nic', 'test "$(ls /sys/class/net)" = lo && test -z "$(ip route)"')
+                # CONFIG_IPV6_SIT creates a dormant sit0 even with QEMU -nic none.
+                # Check device-backed NICs and routes, rather than interface names.
+                report['offline_interfaces'] = command('offline-no-nic',
+                    'ip link; ip route; nic=0; for interface in /sys/class/net/*; do '
+                    'if test -e "$interface/device"; then nic=1; fi; done; '
+                    'test "$nic" = 0 && test -z "$(ip route)"')
             else:
                 report['network_before_loss'] = command('network-before-loss',
                     'ip -4 addr show dev eth0; ip route; test "$(cat /sys/class/net/eth0/carrier)" = 1')

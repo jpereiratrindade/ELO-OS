@@ -2,7 +2,7 @@
 
 > Faça simples. Depois deixe mais leve. **Sempre pronto. Sempre incompleto.**
 
-**Versão de projeto:** `v0.1.0` · **Estado:** base experimental com boot QEMU x86_64 e ARM64 demonstrado; Pi 5 físico pendente · **Hardware:** Raspberry Pi 5, ARM64
+**Versão de projeto:** `v0.1.0` · **Estado:** console e apresentação gráfica QEMU x86_64/ARM64 demonstrados; Pi 5 físico pendente · **Hardware:** Raspberry Pi 5, ARM64
 
 O ELO/OS é uma árvore `br2-external` do Buildroot para compor uma distribuição-appliance Linux mínima. **Não é outro kernel**, nem o ELO Server, nem a aplicação ELO existente. A imagem Pi 5 foi compilada; a base x86_64 iniciou em QEMU com KVM e TCG, e a base ARM64 `virt` iniciou com TCG. Há uma apresentação local experimental em C++/Qt Quick, independente da rede. **Não afirma funcionamento gráfico nem confiabilidade homologados no hardware.**
 
@@ -45,7 +45,7 @@ Próxima etapa: executar `python3 scripts/pi5-preflight.py` no Fedora e seguir o
 
 ### Segundo marco: P2, apresentação local
 
-**Próxima validação no desktop:** novos adaptadores de conteúdo/conectividade, modelo idempotente e supervisão estão implementados, com C++/Qt e boot gráfico ainda por validar. O build do laptop foi encerrado a pedido do mantenedor. Consulte o [roteiro de compilação e testes](docs/tests/desktop-validation.md); os PASS anteriores continuam vinculados às suas fontes e artefatos históricos.
+**Validação no desktop em 2026-11-09:** cliente C++23/Qt, adaptadores, ledger e supervisor passaram nos ensaios nativos, incluindo sessão gráfica Fedora. Imagens x86_64/KVM e ARM64/TCG passaram sem NIC e com perda/reconexão, incluindo SIGKILL/SIGSTOP e frames inspecionados. Núcleo ARM64 passou em C++23 e no subconjunto experimental C++26. Builds executados em Toolbox Fedora 44 com 32 jobs. Consulte as evidências [x86_64](docs/evidence/P2-DESKTOP-X86-20261109.md), [ARM64](docs/evidence/P2-DESKTOP-AARCH64-20261109.md) e o [roteiro de compilação e testes](docs/tests/desktop-validation.md). Os PASS históricos preservam seu escopo.
 
 O núcleo C++ começa sem rede e oferece três páginas locais com navegação e reinício. O frontend Qt Quick observa os estados e encaminha teclado/botões. É uma apresentação básica de disponibilidade; ainda não implementa protocolo ELO, conteúdo do servidor, cache, identidade pessoal ou sincronização.
 
@@ -58,7 +58,7 @@ No Fedora com dependências Qt de desenvolvimento disponíveis:
 
 Build nativo em `build/client-fedora/`, separado do Buildroot. O padrão é C++23 portátil; C++26 é um perfil experimental explícito, avaliado pelo código e testes reais. Consulte o [contrato e comandos de teste do cliente](tests/client/README.md) e a [decisão arquitetural](docs/adr/ADR-009-local-client.md).
 
-Para a bancada gráfica, use `PROFILE=qemu-x86_64-gui` ou `PROFILE=qemu-aarch64-gui` com `scripts/build.sh` e `scripts/run-qemu.sh`. Cada perfil tem saída própria em `output/`, Qt Quick por software, LinuxFB/DRM, VirtIO GPU e apresentação em tela cheia. O teste `tests/client/qemu-gui-smoke.py` prevê partida sem NIC, framebuffer/teclado e recuperação de processo; o cenário `QEMU_GUI_NETWORK=user` verifica perda/reconexão do link. Esses ensaios ainda aguardam imagem concluída. Essa pilha não comprova EGLFS/V3D na Pi 5; não habilite o cliente no perfil físico antes de configurar e validar sua pilha gráfica.
+Para a bancada gráfica, use `PROFILE=qemu-x86_64-gui` ou `PROFILE=qemu-aarch64-gui` com `scripts/build.sh` e `scripts/run-qemu.sh`. Cada perfil tem saída própria em `output/`, Qt Quick por software, LinuxFB/DRM, VirtIO GPU e apresentação em tela cheia. O teste `tests/client/qemu-gui-smoke.py` cobre partida sem NIC, framebuffer/teclado e recuperação de processo; o cenário `QEMU_GUI_NETWORK=user` verifica perda/reconexão do link. Ambos passaram nas duas arquiteturas. No desktop Toolbox, exporte primeiro o perfil escolhido em `PROFILE` e informe também `OUTPUT_DIR="$PWD/output/toolbox/$PROFILE"`. Essa pilha não comprova EGLFS/V3D na Pi 5; não habilite o cliente no perfil físico antes de configurar e validar sua pilha gráfica.
 
 ### Desenvolvimento no Fedora com QEMU
 

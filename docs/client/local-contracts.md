@@ -1,6 +1,6 @@
 # Cliente — contratos locais experimentais
 
-Esta entrega implementa os protótipos T-203/T-205/T-209/T-210/T-211 do [IMPL-002](../ELO-OS-IMPL-002_v0.1.0.md). O código Qt/C++ novo aguarda compilação e validação no desktop; os testes Python/shell têm evidência separada. Não há contrato de servidor, conteúdo pessoal, HTTPS, sessão autenticada ou estado ONLINE operacional.
+Esta entrega implementa os protótipos T-203/T-205/T-209/T-210/T-211 do [IMPL-002](../ELO-OS-IMPL-002_v0.1.0.md). Contratos C++23/Qt e integração gráfica x86_64/ARM64 foram validados no desktop; métodos, arquiteturas e limites constam na [matriz de aceitação](../tests/acceptance.md). Os testes Python/shell têm evidência separada. Não há contrato de servidor, conteúdo pessoal, HTTPS, sessão autenticada ou estado ONLINE operacional.
 
 ## Portas e adaptadores
 
@@ -33,7 +33,7 @@ Os testes de falha usam diretório descartável e exceções injetadas, inclusiv
 
 `core/events.hpp` define `EventLedger`: chave opaca não vazia até 128 bytes, payload opaco não vazio até 4096 bytes, tentativa, prazo monotônico e confirmação local. Mesma chave/payload retorna duplicate; payload divergente retorna conflict e preserva o original, inclusive após confirmação. Até 256 chaves são retidas; lotação é explícita, sem expulsão silenciosa.
 
-O relógio é injetado. Prazos de reenvio são 1, 2, 4 e 8 segundos até cinco tentativas; um evento esgotado permanece diagnosticável, sem envio infinito. ACK local exige a mesma chave/payload e é idempotente. Esta é uma política **em memória**, exercitada por testes C++ ainda não executados nesta entrega. Reiniciar o processo perde o ledger; não há fila durável, transporte ou alegação de idempotência do servidor. O protótipo não coleta eventos da navegação da fixture.
+O relógio é injetado. Prazos de reenvio são 1, 2, 4 e 8 segundos até cinco tentativas; um evento esgotado permanece diagnosticável, sem envio infinito. ACK local exige a mesma chave/payload e é idempotente. Esta é uma política **em memória**, exercitada pelos contratos nativos C++23 e ARM64 C++23/C++26 experimental do desktop. Reiniciar o processo perde o ledger; não há fila durável, transporte ou alegação de idempotência do servidor. O protótipo não coleta eventos da navegação da fixture.
 
 ## Saúde e supervisão
 
@@ -49,4 +49,4 @@ O supervisor requer PID/geração corretos, horário recente, estado conhecido e
 
 Ao esgotar o orçamento, encerra com código 1 e diagnóstico `give-up` no log. Não reinicia VM, não aciona watchdog e não reinicia por ausência de rede. Uma tela de erro responsiva conta como apresentação viva, mas seu estado continua ERROR_RECOVERABLE/ERROR_FATAL e não vira READY_LOCAL. Não se promete tela de diagnóstico após falha do próprio supervisor.
 
-`/run/elo-client/{supervisor.pid,child.pid,health}` são temporários; logs ficam em `/run/elo-client.log`. SIGTERM ao supervisor encerra/recolhe o filho e remove os registros. O serviço continua como root na bancada. Esta política não é homologação de produção nem prova com a aplicação Qt real antes da validação no desktop.
+`/run/elo-client/{supervisor.pid,child.pid,health}` são temporários; logs ficam em `/run/elo-client.log`. SIGTERM ao supervisor encerra/recolhe o filho e remove os registros. O serviço continua como root na bancada. A integração com Qt real foi exercitada no desktop e nas imagens x86_64/KVM e ARM64/TCG. Esta política permanece experimental, sem homologação de produção.

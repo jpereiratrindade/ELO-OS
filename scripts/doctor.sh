@@ -13,6 +13,22 @@ for tool in git make gcc g++ python3 rsync tar awk sed xz gzip base64 bzip2 patc
     failed=1
   fi
 done
+if command -v perl >/dev/null 2>&1; then
+  perl_modules=(Data::Dumper English ExtUtils::MakeMaker Thread::Queue FindBin IPC::Cmd)
+  selected_config="$OUT_DIR/.config"
+  [[ -f "$selected_config" ]] || selected_config="$ROOT/configs/$DEFCONFIG"
+  if grep -Eq '^BR2_(LINUX_KERNEL_NEEDS_HOST_OPENSSL|PACKAGE_(HOST_)?(LIB)?OPENSSL)=y$' "$selected_config"; then
+    perl_modules+=(Time::Piece)
+  fi
+  for module in "${perl_modules[@]}"; do
+    if perl -e "require $module" >/dev/null 2>&1; then
+      printf 'PASS: módulo Perl %s\n' "$module"
+    else
+      printf 'FAIL: módulo Perl %s ausente; dependências em docs/tests/desktop-validation.md\n' "$module"
+      failed=1
+    fi
+  done
+fi
 if [[ -f "$BR_DIR/Makefile" ]]; then
   if grep -qx "export BR2_VERSION := $VERSION" "$BR_DIR/Makefile"; then
     echo "PASS: Buildroot $VERSION em $BR_DIR"
