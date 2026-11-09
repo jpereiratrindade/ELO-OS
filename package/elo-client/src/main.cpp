@@ -10,6 +10,8 @@
 #include <QQuickWindow>
 #include <QUrl>
 #include <QRegularExpression>
+#include <QShortcut>
+#include <QKeySequence>
 
 int main(int argc, char* argv[]) {
   QGuiApplication app(argc, argv);
@@ -17,6 +19,7 @@ int main(int argc, char* argv[]) {
   QCommandLineParser parser;
   parser.addHelpOption();
   parser.addOption({"fullscreen", "Present in fullscreen."});
+  parser.addOption({"exit-on-escape", "Allow Escape to quit a local bench session."});
   parser.addOption({"content-dir", "Read an explicitly activated local test fixture.", "directory"});
   parser.addOption({"health-file", "Publish local presentation health for the supervisor.", "file"});
   parser.addOption({"health-token", "Supervisor generation identifier, not an authentication credential.", "token"});
@@ -39,6 +42,10 @@ int main(int argc, char* argv[]) {
   if (engine.rootObjects().isEmpty()) return 2;
   auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
   if (!window) return 2;
+  if (parser.isSet("exit-on-escape")) {
+    auto* exitShortcut = new QShortcut(QKeySequence(Qt::Key_Escape), window);
+    QObject::connect(exitShortcut, &QShortcut::activated, &app, &QCoreApplication::quit);
+  }
   BootClock clock;
   LinuxNetworkStatus network;
   QtRuntime runtime(*window, model, clock, network, health_file, token);

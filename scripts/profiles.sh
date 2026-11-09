@@ -4,6 +4,7 @@ VERSION=2026.08.1
 GRAPHICS=0
 APPLIANCE=0
 case "$PROFILE" in
+  pi5-client) DEFCONFIG=elo_pi5_client_defconfig; ARCH=aarch64; KERNEL=Image; artifacts=(sdcard.img); CONSOLE=ttyAMA10; GRAPHICS=1 ;;
   pi5) DEFCONFIG=elo_pi5_defconfig; ARCH=aarch64; KERNEL=Image; artifacts=(sdcard.img); CONSOLE=ttyAMA10 ;;
   qemu-x86_64) DEFCONFIG=elo_qemu_x86_64_defconfig; ARCH=x86_64; KERNEL=bzImage; artifacts=(bzImage rootfs.ext4); CONSOLE=ttyS0 ;;
   qemu-aarch64) DEFCONFIG=elo_qemu_aarch64_defconfig; ARCH=aarch64; KERNEL=Image; artifacts=(Image rootfs.ext4); CONSOLE=ttyAMA0 ;;
@@ -11,7 +12,7 @@ case "$PROFILE" in
   qemu-aarch64-gui) DEFCONFIG=elo_qemu_aarch64_gui_defconfig; ARCH=aarch64; KERNEL=Image; artifacts=(Image rootfs.ext4); CONSOLE=ttyAMA0; GRAPHICS=1 ;;
   qemu-x86_64-appliance) DEFCONFIG=elo_qemu_x86_64_appliance_defconfig; ARCH=x86_64; KERNEL=bzImage; artifacts=(bzImage rootfs.ext4); CONSOLE=ttyS0; GRAPHICS=1; APPLIANCE=1 ;;
   qemu-aarch64-appliance) DEFCONFIG=elo_qemu_aarch64_appliance_defconfig; ARCH=aarch64; KERNEL=Image; artifacts=(Image rootfs.ext4); CONSOLE=ttyAMA0; GRAPHICS=1; APPLIANCE=1 ;;
-  *) echo "Perfil desconhecido: $PROFILE (use pi5 ou perfis QEMU console, -gui ou -appliance)" >&2; exit 2 ;;
+  *) echo "Perfil desconhecido: $PROFILE (use pi5, pi5-client ou perfis QEMU console, -gui ou -appliance)" >&2; exit 2 ;;
 esac
 BR_DIR=${BUILDROOT_DIR:-"$ROOT/.cache/buildroot-$VERSION"}
 OUT_DIR=$(realpath -m "${OUTPUT_DIR:-"$ROOT/output/$PROFILE"}")

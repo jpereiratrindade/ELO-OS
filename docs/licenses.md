@@ -101,3 +101,13 @@ Adições de alvo em relação aos perfis de console:
 | qt6shadertools | 6.11.2 | Apache-2.0 or MIT (SPIRV-Cross), GPL-2.0 or LGPL-3.0 or GPL-3.0, GPL-3.0 (tests), GFDL-1.3 no invariants (docs), GPL-3.0 WITH Qt-GPL-exception-1.0 (tools) |
 
 Qt mantém as licenças declaradas dos seus módulos; nenhum texto/licença de terceiro foi substituído por GPL-3.0-only do projeto. A toolchain externa continua com metadado `unknown` e exige a coleta separada de textos/fontes. `legal-info` e revisão completa de distribuição continuam pendentes; este inventário não declara essa etapa concluída.
+
+## Pi 5 com cliente e Wi-Fi
+
+O perfil experimental `pi5-client` seleciona `brcmfmac_sdio-firmware-rpi`, fixado
+pelo Buildroot em `6596d332eaadd63e2413e3937715a084f61c39e2`. Firmware Broadcom/Cypress
+conserva termos próprios, declarados como `PROPRIETARY` pela receita. O texto
+`LICENSE` original é incluído em `/usr/share/licenses/brcmfmac-sdio-firmware-rpi/`.
+Também entram `iw`, `libnl`, `wireless-regdb` e `wpa_supplicant`; inventário
+resolvido fica em `output/pi5-client/software-inventory.json` após a compilação.
+Esta adição não declara concluída a revisão completa de distribuição.

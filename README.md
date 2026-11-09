@@ -2,7 +2,7 @@
 
 > Faça simples. Depois deixe mais leve. **Sempre pronto. Sempre incompleto.**
 
-**Versão de projeto:** `v0.1.0` · **Estado:** console, GUI e fundação de appliance RO + dados persistentes demonstrados em QEMU x86_64/ARM64; Pi 5 físico adiado · **Hardware:** Raspberry Pi 5, ARM64
+**Versão de projeto:** `v0.1.0` · **Estado:** console, GUI e fundação de appliance RO + dados persistentes demonstrados em QEMU x86_64/ARM64; boot de console Pi 5 relatado pelo operador · **Hardware:** Raspberry Pi 5, ARM64
 
 O ELO/OS é uma árvore `br2-external` do Buildroot para compor uma distribuição-appliance Linux mínima. **Não é outro kernel**, nem o ELO Server, nem a aplicação ELO existente. A imagem Pi 5 foi compilada; a base x86_64 iniciou em QEMU com KVM e TCG, e a base ARM64 `virt` iniciou com TCG. Há uma apresentação local experimental em C++/Qt Quick, independente da rede. **Não afirma funcionamento gráfico nem confiabilidade homologados no hardware.**
 
@@ -16,7 +16,7 @@ O ELO/OS é uma árvore `br2-external` do Buildroot para compor uma distribuiç�
 ## Árvore
 
 - `docs/`: constituição e ADRs versionados; critérios de aceitação.
-- `configs/`: três perfis de console, dois gráficos P2 e dois appliances virtuais isolados.
+- `configs/`: perfis de console, gráficos P2, appliances virtuais e Pi 5 experimental com cliente/Wi-Fi.
 - `board/elo/common/`: arquivos compartilhados; `board/elo/<perfil>/`: identidade e ajustes por plataforma.
 - `package/elo-client/`: núcleo portátil C++ e apresentação Qt/QML **opcional, fora das imagens P1 de console**.
 - `scripts/`: build, diagnóstico e inventário da imagem.
@@ -39,9 +39,17 @@ O comando `./scripts/build.sh` cria `.cache/buildroot-2026.08.1/`, configura `ou
 
 ### Primeiro marco: P1, console Linux
 
-A imagem Pi 5 foi gerada e inspecionada; seu boot físico permanece pendente. A primeira imagem **não habilita o cliente Qt**: é uma base Pi 5 com identidade ELO/OS. Validar boot e console antes de adicionar a interface gráfica. Os arquivos `board/elo/pi5/genimage.cfg`, `post-image.sh` e `package/elo-client/` estão preparados para fases futuras e **não devem ser interpretados como integração homologada**.
+A imagem Pi 5 original foi gerada e inspecionada; a mídia ajustada iniciou fisicamente conforme relato do operador. O [ensaio físico de 2026-11-09](docs/evidence/P1-PI5-20261109.md) registra boot/login relatados após ajustes locais para microSD e bloqueio de VC4; não valida cliente nem Wi-Fi. A primeira imagem **não habilita o cliente Qt**: é uma base Pi 5 com identidade ELO/OS. Validar boot e console antes de adicionar a interface gráfica. Os arquivos `board/elo/pi5/genimage.cfg`, `post-image.sh` e `package/elo-client/` estão preparados para fases futuras e **não devem ser interpretados como integração homologada**.
 
-Ensaios físicos adiados pelo mantenedor em 2026-11-09. Quando retomados, executar `python3 scripts/pi5-preflight.py` no Fedora e seguir o [roteiro de primeiro boot físico](tests/boot/pi5-first-boot.md). A checagem compara a imagem histórica com seu hash registrado e inspeciona partições e assinaturas sem gravar mídia. O [modelo de evidência](tests/boot/pi5-evidence-template.md) prepara o registro do primeiro boot e das 30 partidas.
+Os ensaios físicos haviam sido adiados pelo mantenedor; o primeiro relato de boot não encerra o protocolo de validação. Para novos ensaios, executar `python3 scripts/pi5-preflight.py` no Fedora e seguir o [roteiro de primeiro boot físico](tests/boot/pi5-first-boot.md). A checagem compara a imagem histórica com seu hash registrado e inspeciona partições e assinaturas sem gravar mídia. O [modelo de evidência](tests/boot/pi5-evidence-template.md) prepara o registro do primeiro boot e das 30 partidas.
+
+### Pi 5: próximo ensaio com cliente e Wi-Fi
+
+Perfil experimental `pi5-client` acrescenta Qt Quick por CPU/LinuxFB, firmware Wi-Fi,
+`iw` e WPA2-Personal. Preserva bloqueio de VC4 usado no boot de console relatado pelo
+operador; cliente começa manualmente com `elo-client-start`. Build e ensaios estão
+no [roteiro Pi 5 cliente/Wi-Fi](docs/tests/pi5-client-wifi.md). Não há credenciais
+incorporadas nem validação física deste novo perfil. O perfil `pi5` fica preservado.
 
 ### Segundo marco: P2, apresentação local
 
@@ -112,7 +120,7 @@ QEMU_ACCEL=kvm python3 tests/boot/qemu-smoke.py
 QEMU_ACCEL=tcg python3 tests/boot/qemu-smoke.py
 ```
 
-Q0 verifica estrutura, sintaxe e Kconfig dos sete perfis, sem compilar ou inicializar imagens. Q1 executa duas sessões reais no perfil escolhido, incluindo PID 1, console, ext4, DHCP, shutdown, estabilidade do login e hashes antes/depois. Logs e relatórios JSON ficam em `output/<perfil>/qemu-smoke-*`; timeout/falha produz código diferente de zero. Os testes devem rodar após o build, sem outra VM ou build no mesmo diretório de saída.
+Q0 verifica estrutura, sintaxe e Kconfig dos oito perfis, sem compilar ou inicializar imagens. Q1 executa duas sessões reais no perfil escolhido, incluindo PID 1, console, ext4, DHCP, shutdown, estabilidade do login e hashes antes/depois. Logs e relatórios JSON ficam em `output/<perfil>/qemu-smoke-*`; timeout/falha produz código diferente de zero. Os testes devem rodar após o build, sem outra VM ou build no mesmo diretório de saída.
 
 O [plano P1](docs/ELO-OS-IMPL-001_v0.1.1.md), sua [revisão](docs/tests/implementation-review.md) e o [roteiro físico](tests/boot/pi5-first-boot.md) separam os resultados virtuais dos ensaios de hardware. O [IMPL-002](docs/ELO-OS-IMPL-002_v0.1.0.md) foi preservado como plano P2; sua [revisão de escopo](docs/tests/p2-client-review.md) e a [evidência do cliente](docs/evidence/P2-CLIENT-20261108.md) distinguem o que já foi testado das etapas futuras de persistência, servidor e supervisão.
 

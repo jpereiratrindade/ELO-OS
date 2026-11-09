@@ -26,6 +26,9 @@ for file in README.md LICENSE VERSION external.desc external.mk Config.in \
   scripts/image-build-info.py docs/ELO-OS-IMPL-003_v0.1.0.md; do
   test -s "$ROOT/$file" || { echo "ERRO: faltando $file" >&2; exit 1; }
 done
+for file in "$ROOT"/board/elo/pi5-client/rootfs-overlay/usr/bin/* "$ROOT"/board/elo/pi5-client/rootfs-overlay/etc/init.d/*; do
+  sh -n "$file"
+done
 for file in "$ROOT"/scripts/*.sh "$ROOT"/board/elo/pi5/*.sh; do
   bash -n "$file"
 done
@@ -65,3 +68,5 @@ PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/tests/boot/pi5-preflight-test.py"
 PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/tests/client/local-content-test.py"
 PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/tests/client/supervisor-test.py"
 PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/tests/recovery/data-image-test.py"
+
+PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/tests/network/pi5-tools-test.py"

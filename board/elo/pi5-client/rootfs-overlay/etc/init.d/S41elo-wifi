@@ -1,0 +1,35 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-only
+# Optional Wi-Fi: no stored configuration means no connection attempt.
+CONFIG=/etc/elo-wifi.conf
+PIDFILE=/run/elo-wifi.pid
+case "$1" in
+  start)
+    [ -s "$CONFIG" ] || exit 0
+    if [ -s "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then exit 0; fi
+    modprobe brcmfmac || exit 1
+    attempt=0
+    while [ ! -d /sys/class/net/wlan0 ]; do
+      attempt=$((attempt + 1))
+      [ "$attempt" -lt 10 ] || { echo 'Wi-Fi: wlan0 ausente' >&2; exit 1; }
+      sleep 1
+    done
+    ip link set wlan0 up || exit 1
+    wpa_supplicant -B -P "$PIDFILE" -i wlan0 -D nl80211 -c "$CONFIG" || exit 1
+    # DHCP is asynchronous so a missing AP does not block console login.
+    if ! udhcpc -b -t 1 -T 1 -i wlan0 -p /run/elo-wifi-dhcp.pid; then
+      "$0" stop
+      exit 1
+    fi
+    ;;
+  stop)
+    for p in /run/elo-wifi-dhcp.pid "$PIDFILE"; do
+      if [ -s "$p" ]; then
+        kill "$(cat "$p")" 2>/dev/null || true
+        rm -f "$p"
+      fi
+    done
+    ;;
+  restart) "$0" stop && "$0" start ;;
+  *) echo "Usage: $0 {start|stop|restart}" >&2; exit 2 ;;
+esac

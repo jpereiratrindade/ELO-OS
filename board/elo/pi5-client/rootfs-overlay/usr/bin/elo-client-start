@@ -1,0 +1,12 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-only
+set -eu
+[ -c /dev/fb0 ] || { echo 'Framebuffer /dev/fb0 ausente; preserve console e confira dmesg.' >&2; exit 1; }
+export QT_QPA_PLATFORM=linuxfb:fb=/dev/fb0
+unset QT_QPA_FB_DRM
+export QT_QUICK_BACKEND=software
+export QT_QPA_FONTDIR=/usr/share/fonts/dejavu
+export XDG_RUNTIME_DIR=/run/elo-client
+mkdir -p "$XDG_RUNTIME_DIR"
+chmod 700 "$XDG_RUNTIME_DIR"
+exec /usr/bin/elo-client --fullscreen --exit-on-escape "$@"

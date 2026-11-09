@@ -1,0 +1,4 @@
+# Experimental Pi 5 client: preserve firmware framebuffer, block VC4 in cmdline.
+kernel=Image
+disable_overscan=1
+dtoverlay=vc4-kms-v3d-pi5

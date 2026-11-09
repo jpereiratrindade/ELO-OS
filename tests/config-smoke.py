@@ -7,7 +7,8 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 BR = Path(os.environ.get("BUILDROOT_DIR", ROOT / ".cache/buildroot-2026.08.1")).resolve()
-PROFILES = {"pi5": ("elo_pi5_defconfig", "aarch64", None),
+PROFILES = {"pi5-client": ("elo_pi5_client_defconfig", "aarch64", None),
+            "pi5": ("elo_pi5_defconfig", "aarch64", None),
             "qemu-x86_64": ("elo_qemu_x86_64_defconfig", "x86_64", "ttyS0"),
             "qemu-aarch64": ("elo_qemu_aarch64_defconfig", "aarch64", "ttyAMA0"),
             "qemu-x86_64-gui": ("elo_qemu_x86_64_gui_defconfig", "x86_64", "ttyS0"),
@@ -42,13 +43,25 @@ def main():
                 if line not in text.splitlines():
                     raise RuntimeError(f"{profile}: símbolo perdido pelo Kconfig: {line}")
             appliance = profile.endswith("-appliance")
-            gui = profile.endswith("-gui") or appliance
+            gui = profile.endswith("-gui") or appliance or profile == "pi5-client"
             if gui:
                 for line in ("BR2_PACKAGE_ELO_CLIENT=y", "BR2_PACKAGE_QT6BASE_LINUXFB=y",
-                             "BR2_PACKAGE_QT6DECLARATIVE_QUICK=y", "BR2_PACKAGE_LIBDRM=y",
-                             "BR2_PACKAGE_DEJAVU_SANS=y", 'BR2_TARGET_ROOTFS_EXT2_SIZE="256M"'):
+                             "BR2_PACKAGE_QT6DECLARATIVE_QUICK=y",
+                             "BR2_PACKAGE_DEJAVU_SANS=y",
+                             'BR2_TARGET_ROOTFS_EXT2_SIZE="512M"' if profile == "pi5-client" else 'BR2_TARGET_ROOTFS_EXT2_SIZE="256M"'):
                     if line not in text.splitlines():
                         raise RuntimeError(f"{profile}: requisito gráfico perdido: {line}")
+            if gui and profile != "pi5-client" and "BR2_PACKAGE_LIBDRM=y" not in text.splitlines():
+                raise RuntimeError(f"{profile}: libdrm ausente")
+            if profile == "pi5-client":
+                for line in ("BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI_WIFI=y",
+                             "BR2_PACKAGE_WIRELESS_REGDB=y", "BR2_PACKAGE_IW=y",
+                             "BR2_PACKAGE_WPA_SUPPLICANT_NL80211=y",
+                             "BR2_PACKAGE_WPA_SUPPLICANT_CLI=y",
+                             "BR2_PACKAGE_WPA_SUPPLICANT_PASSPHRASE=y",
+                             "BR2_PACKAGE_RPI_FIRMWARE_INSTALL_DTB_OVERLAYS=y"):
+                    if line not in text.splitlines():
+                        raise RuntimeError(f"{profile}: requisito fisico perdido: {line}")
             if appliance:
                 if '# BR2_TARGET_GENERIC_REMOUNT_ROOTFS_RW is not set' not in text.splitlines():
                     raise RuntimeError(f'{profile}: rootfs deve permanecer somente leitura')

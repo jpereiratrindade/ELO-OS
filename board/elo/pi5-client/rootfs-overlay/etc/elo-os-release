@@ -1,0 +1,4 @@
+NAME="ELO/OS"
+VERSION="0.1.0"
+STATUS="experimental-client-wifi"
+PLATFORM="raspberry-pi-5-aarch64"

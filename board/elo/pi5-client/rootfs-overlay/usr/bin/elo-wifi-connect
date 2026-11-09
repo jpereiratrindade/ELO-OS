@@ -1,0 +1,45 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-only
+# Configure WPA2-Personal locally; never put the passphrase on a command line.
+set -eu
+export LC_ALL=C
+umask 077
+[ "$#" -eq 2 ] || { echo "Uso: $0 PAIS SSID (ex.: $0 BR 'Minha rede')" >&2; exit 2; }
+COUNTRY=$1
+SSID=$2
+case "$COUNTRY" in [A-Z][A-Z]) ;; *) echo 'Informe codigo de pais com duas letras maiusculas.' >&2; exit 2 ;; esac
+[ "${#SSID}" -gt 0 ] && [ "${#SSID}" -le 32 ] || { echo 'SSID deve ter 1 a 32 bytes.' >&2; exit 2; }
+[ "$(id -u)" -eq 0 ] || { echo 'Execute como root no Pi.' >&2; exit 1; }
+[ -r /dev/tty ] || { echo 'Precisa de terminal local para senha.' >&2; exit 1; }
+TEMP=
+TTY_STATE=$(stty -g < /dev/tty)
+cleanup() {
+  stty "$TTY_STATE" < /dev/tty 2>/dev/null || true
+  [ -z "$TEMP" ] || rm -f "$TEMP" "$TEMP.raw"
+}
+trap cleanup EXIT
+trap 'exit 1' HUP INT TERM
+printf 'Senha Wi-Fi (WPA2, 8 a 63 caracteres): ' > /dev/tty
+stty -echo < /dev/tty
+TEMP=$(mktemp /etc/.elo-wifi.XXXXXX)
+if ! wpa_passphrase "$SSID" < /dev/tty > "$TEMP.raw"; then
+  echo 'Falha ao ler ou derivar senha Wi-Fi; use 8 a 63 caracteres.' >&2
+  exit 2
+fi
+stty "$TTY_STATE" < /dev/tty
+printf '\n' > /dev/tty
+SSID_HEX=$(printf '%s' "$SSID" | od -An -tx1 | tr -d ' \n')
+KEY=$(sed -nE 's/^[[:space:]]*psk=([0-9a-f]{64})$/\1/p' "$TEMP.raw")
+[ "${#KEY}" -eq 64 ] || { echo 'Falha ao derivar chave Wi-Fi.' >&2; exit 1; }
+{
+  printf 'country=%s\nctrl_interface=/run/wpa_supplicant\nupdate_config=0\n' "$COUNTRY"
+  printf 'network={\n    ssid=%s\n    psk=%s\n    key_mgmt=WPA-PSK\n}\n' "$SSID_HEX" "$KEY"
+} > "$TEMP"
+unset KEY
+rm -f "$TEMP.raw"
+grep -Eq '^[[:space:]]*psk=[0-9a-f]{64}$' "$TEMP" || { echo 'Falha ao derivar chave Wi-Fi.' >&2; exit 1; }
+chmod 600 "$TEMP"
+mv -f "$TEMP" /etc/elo-wifi.conf
+TEMP=
+/etc/init.d/S41elo-wifi restart
+printf 'Configuracao salva. Confira: wpa_cli -i wlan0 status; ip -4 addr show wlan0\n'
