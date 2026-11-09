@@ -7,8 +7,10 @@
 #include <vector>
 
 namespace elo {
+class Diagnostics;
 enum class State { booting, ready_local, connecting, online, degraded_offline,
                    update_staged, validating, error_recoverable, restarting, error_fatal };
+std::string_view state_name(State state);
 struct Page { std::string title; std::string body; };
 struct Fixture {
   std::string id;
@@ -35,7 +37,8 @@ using Event = std::variant<Start, Next, Previous, Reset, PresentationReady, Netw
 // are both required for READY_LOCAL. Link availability never establishes ONLINE.
 class Client {
  public:
-  explicit Client(ContentCatalog* catalog = nullptr) : catalog_(catalog) {}
+  explicit Client(ContentCatalog* catalog = nullptr, Diagnostics* diagnostics = nullptr)
+      : catalog_(catalog), diagnostics_(diagnostics) {}
   bool dispatch(const Event& event);
   bool start() { return dispatch(Start{}); }
   bool next() { return dispatch(Next{}); }
@@ -60,6 +63,7 @@ class Client {
   bool handle(NetworkChanged event);
   bool handle(Retry);
   ContentCatalog* catalog_;
+  Diagnostics* diagnostics_;
   State state_ = State::booting;
   Fixture fixture_;
   std::string error_;

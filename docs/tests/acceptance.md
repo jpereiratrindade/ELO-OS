@@ -11,10 +11,13 @@ Versão do projeto: **0.1.0**. Estado em 2026-11-08: imagem Pi 5 compilada, cons
 | P1-D / Q1A | Boot ARM64 QEMU `virt` em TCG | PASS — BOOTED_QEMU_AARCH64, Q1A | [Evidência ARM64](../evidence/P1-QEMU-AARCH64-20261108.md), fonte `3737a9c`, dois boots e hashes |
 | P1-E / Q2 | Boot e console físico Raspberry Pi 5 | NOT TESTED | [Roteiro físico](../../tests/boot/pi5-first-boot.md) |
 | P1-F | 30 partidas físicas | NOT TESTED | Registro de ciclos ainda vazio |
-| P2-C0 | Núcleo C++23 sem Qt, fixture, eventos offline e falhas injetadas | PASS experimental | [Evidência cliente](../evidence/P2-CLIENT-20261108.md), fonte 202ab1d |
-| P2-HGUI | Qt/QML no Fedora, apresentação e entrada reais | PASS experimental | [Evidência cliente](../evidence/P2-CLIENT-20261108.md), sessão gráfica e Xvfb |
-| P2-A64 | Núcleo AArch64, C++23 e experimento C++26 | PASS — espaço de usuário | [Evidência cliente](../evidence/P2-CLIENT-20261108.md), QEMU user; não é GPU/kernel |
-| P2-QGUI | Qt Quick e VirtIO GPU em perfis isolados | NOT TESTED | Build e ensaio gráfico têm evidência própria; supervisão/falha/reinício ainda pendentes |
+| P2-C0 | Núcleo C++23 sem Qt, fixture, eventos offline e falhas injetadas | PASS histórico 202ab1d; acréscimos atuais NOT TESTED | [Evidência cliente](../evidence/P2-CLIENT-20261108.md); portas/ledger aguardam recompilação |
+| P2-HGUI | Qt/QML no Fedora, apresentação e entrada reais | PASS histórico 202ab1d; acréscimos atuais NOT TESTED | [Evidência cliente](../evidence/P2-CLIENT-20261108.md); conectividade, retry, store e saúde novos aguardam desktop |
+| P2-A64 | Núcleo AArch64, C++23 e experimento C++26 | PASS histórico — espaço de usuário; revisão atual NOT TESTED | [Evidência cliente](../evidence/P2-CLIENT-20261108.md); não é GPU/kernel |
+| P2-STORE-HOST | Publicação atômica de fixture em diretório descartável | PASS protótipo host | [Evidência local](../evidence/P2-LOCAL-PROTOTYPES-20261108.md); não prova energia nem `/data` |
+| P2-SUP-HOST | Supervisor com processo simulado, queda/travamento e backoff | PASS protótipo host | [Evidência local](../evidence/P2-LOCAL-PROTOTYPES-20261108.md); não é aplicação Qt real |
+| P2-EVENTMODEL | Ledger C++ em memória e idempotência local | IMPLEMENTED / NOT TESTED | Fonte/testes preparados; sem transporte ou persistência |
+| P2-QGUI | Qt Quick, VirtIO GPU, offline/reconexão e recuperação nas imagens | NOT TESTED | Build do laptop interrompido a pedido; [próxima validação no desktop](desktop-validation.md) |
 | P2-PI5 | Qt6/QML, DRM/KMS e periféricos físicos | NOT TESTED | Não habilitado na imagem Pi 5 histórica |
 | P3 | ELO Server/Thin Client, HTTPS, cache e offline | NOT TESTED | Contratos futuros |
 | P4 | Rootfs RO, `/data`, energia e recuperação | NOT IMPLEMENTED | ADR-004/005 propostos; hoje rootfs virtual é RW com snapshot no host |

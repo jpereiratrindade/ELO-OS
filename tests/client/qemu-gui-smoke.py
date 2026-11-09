@@ -63,6 +63,11 @@ def main():
     if profile not in ('qemu-x86_64-gui', 'qemu-aarch64-gui'):
         raise SystemExit('PROFILE deve ser qemu-x86_64-gui ou qemu-aarch64-gui')
     arch = 'aarch64' if 'aarch64' in profile else 'x86_64'
+    network_mode = os.environ.get('QEMU_GUI_NETWORK', 'off')
+    if network_mode not in ('off', 'user'):
+        raise SystemExit('QEMU_GUI_NETWORK deve ser off ou user')
+    prefix = 'gui-smoke' if network_mode == 'off' else 'gui-smoke-network'
+    frame_prefix = 'gui' if network_mode == 'off' else 'gui-network'
     out = Path(os.environ.get('OUTPUT_DIR', ROOT / 'output' / profile)).resolve()
     kernel = 'Image' if arch == 'aarch64' else 'bzImage'
     images = [out / 'images' / name for name in (kernel, 'rootfs.ext4')]
@@ -74,14 +79,15 @@ def main():
               'qemu_module_dir': os.environ.get('QEMU_MODULE_DIR', 'default'),
               'config_sha256': digest(out / '.config'),
               'hashes_before': {p.name: digest(p) for p in images},
-              'network': 'no virtual NIC', 'status': 'FAIL', 'checks': []}
+              'network': 'no virtual NIC' if network_mode == 'off' else 'user NIC with link loss/reconnection',
+              'status': 'FAIL', 'checks': []}
     started = time.monotonic()
     deadline = started + float(os.environ.get('QEMU_BOOT_TIMEOUT', '240'))
     proc = None
     qmp = None
-    with tempfile.TemporaryDirectory(prefix='elo-gui-') as temp, (out / 'gui-smoke.log').open('wb') as log:
+    with tempfile.TemporaryDirectory(prefix='elo-gui-') as temp, (out / f'{prefix}.log').open('wb') as log:
         path = Path(temp) / 'qmp.sock'
-        env = {**os.environ, 'PROFILE': profile, 'QEMU_NETWORK': 'off', 'QEMU_DISPLAY': 'none'}
+        env = {**os.environ, 'PROFILE': profile, 'QEMU_NETWORK': network_mode, 'QEMU_DISPLAY': 'none'}
         buffer = b''
 
         def wait_for(pattern):
@@ -118,7 +124,7 @@ def main():
             return output.decode(errors='replace').replace('\r', '')
 
         def frame(name):
-            frame_path = out / f'gui-{name}.ppm'
+            frame_path = out / f'{frame_prefix}-{name}.ppm'
             qmp.execute('screendump', {'filename': str(frame_path)})
             data = frame_path.read_bytes()
             match = re.match(rb'P6\s+(\d+)\s+(\d+)\s+255\s', data)
@@ -132,6 +138,27 @@ def main():
             if len(set(samples)) < 8 or samples.count(b'\x10\x1d\x23') < len(samples) // 4:
                 raise RuntimeError('Framebuffer sem evidência de apresentação renderizada')
             return hashlib.sha256(pixels).hexdigest()
+
+        def health(state='READY_LOCAL', page=None, previous=None):
+            conditions = ['test "$magic" = ELO_HEALTH_V1',
+                          'test "$pid" = "$(cat /run/elo-client/child.pid)"',
+                          'test "$sequence" -ge 2',
+                          f'test "$state" = {state}']
+            if page is not None:
+                conditions.append(f'test "$page" = {int(page)}')
+            if previous is not None:
+                conditions += [f'test "$pid" != {int(previous["pid"])}',
+                               f'test "$token" != {previous["generation"]}']
+            body = ('found=0; for n in $(seq 1 40); do '
+                    'if test -s /run/elo-client/health && test -s /run/elo-client/child.pid; then '
+                    'read -r magic token pid stamp sequence state page digest < /run/elo-client/health; '
+                    'if ' + ' && '.join(conditions) + '; then '
+                    'cat /run/elo-client/health; found=1; break; fi; fi; sleep 1; done; test "$found" = 1')
+            output = command('presentation-health', body)
+            match = re.search(r'(?m)^ELO_HEALTH_V1 ([A-Za-z0-9-]+) (\d+) (\d+) (\d+) ([A-Z_]+) (\d+) ([a-f0-9]{64})$', output)
+            if not match:
+                raise RuntimeError('Health protocol inválido')
+            return dict(zip(('generation', 'pid', 'boot_ms', 'sequence', 'state', 'page', 'digest'), match.groups()))
 
         try:
             report['qemu_version'] = subprocess.check_output([emulator, '--version'], text=True).splitlines()[0]
@@ -154,10 +181,16 @@ def main():
                     or not re.search(r'(?m)^\S+ / ext4 ', result)):
                 raise RuntimeError('BusyBox init e raiz ext4 não demonstrados')
             report['guest_init_mounts'] = result
-            command('offline-no-nic', 'test "$(ls /sys/class/net)" = lo && test -z "$(ip route)"')
+            if network_mode == 'off':
+                command('offline-no-nic', 'test "$(ls /sys/class/net)" = lo && test -z "$(ip route)"')
+            else:
+                report['network_before_loss'] = command('network-before-loss',
+                    'ip -4 addr show dev eth0; ip route; test "$(cat /sys/class/net/eth0/carrier)" = 1')
+                if '10.0.2.15' not in report['network_before_loss']:
+                    raise RuntimeError('DHCP da bancada não demonstrado')
             command('client-running', 'cat /run/elo-client.log; '
-                    'test -s /run/elo-client.pid && kill -0 "$(cat /run/elo-client.pid)" && '
-                    'test "$(readlink /proc/$(cat /run/elo-client.pid)/exe)" = /usr/bin/elo-client')
+                    'test -s /run/elo-client/child.pid && kill -0 "$(cat /run/elo-client/child.pid)" && '
+                    'test "$(readlink /proc/$(cat /run/elo-client/child.pid)/exe)" = /usr/bin/elo-client')
             result = command('local-readiness', 'for n in $(seq 1 60); do '
                              'grep -q "state=READY_LOCAL" /run/elo-client.log && break; sleep 1; done; '
                              'cat /run/elo-client.log; /usr/bin/elo-client-core; '
@@ -168,13 +201,14 @@ def main():
                 raise RuntimeError('Erro QML observado')
             report['memory_kib'] = command('memory', 'free -k')
             report['client_memory'] = command('client-memory',
-                'sed -n "/^VmRSS:/p; /^VmSize:/p; /^Threads:/p" /proc/$(cat /run/elo-client.pid)/status')
+                'sed -n "/^VmRSS:/p; /^VmSize:/p; /^Threads:/p" /proc/$(cat /run/elo-client/child.pid)/status')
             report['qt_runtime_libraries'] = command('qt-runtime-libraries',
-                "awk '/libQt6/ {print $NF}' /proc/$(cat /run/elo-client.pid)/maps | sort -u")
+                "awk '/libQt6/ {print $NF}' /proc/$(cat /run/elo-client/child.pid)/maps | sort -u")
             if 'libQt6Core.so' not in report['qt_runtime_libraries']:
                 raise RuntimeError('Biblioteca Qt Core carregada não demonstrada')
             qmp = Qmp(path)
             time.sleep(2)
+            report['initial_health'] = health(page=1)
             first = frame('ready')
             qmp.key('right')
             time.sleep(1)
@@ -188,6 +222,46 @@ def main():
                 raise RuntimeError('Home não restaurou a apresentação inicial')
             report['frames_sha256'] = {'ready': first, 'next': second, 'reset': reset}
             report['checks'] += ['rendered-framebuffer', 'keyboard-next', 'keyboard-reset']
+            if network_mode == 'user':
+                qmp.key('right')
+                time.sleep(1)
+                before_loss = health(page=2)
+                connected = frame('connected')
+                qmp.execute('set_link', {'name': 'elo-net', 'up': False})
+                lost = health(state='DEGRADED_OFFLINE', page=2)
+                command('carrier-down', 'test "$(cat /sys/class/net/eth0/carrier)" = 0')
+                frame('disconnected')
+                if lost['digest'] != before_loss['digest']:
+                    raise RuntimeError('Perda de rede alterou conteúdo/página')
+                qmp.execute('set_link', {'name': 'elo-net', 'up': True})
+                restored = health(page=2)
+                time.sleep(1)
+                command('carrier-restored', 'test "$(cat /sys/class/net/eth0/carrier)" = 1')
+                if restored['digest'] != before_loss['digest'] or frame('reconnected') != connected:
+                    raise RuntimeError('Reconexão não preservou a apresentação')
+                report['network_health'] = {'before': before_loss, 'lost': lost, 'restored': restored}
+                report['checks'] += ['link-loss-preserves-content', 'reconnection-preserves-content']
+            report['recovery'] = []
+            supervisor = command('supervisor-pid', 'cat /run/elo-client/supervisor.pid').strip()
+            # Output may include the shell prompt; retain the PID from its own line.
+            supervisor_match = re.search(r'(?m)^(\d+)$', supervisor)
+            if not supervisor_match:
+                raise RuntimeError('Supervisor PID ausente')
+            supervisor_pid = int(supervisor_match[1])
+            for fault in ('KILL', 'STOP'):
+                old = health()
+                command(f'inject-{fault.lower()}', f'kill -{fault} {int(old["pid"])}')
+                recovered = health(page=1, previous=old)
+                time.sleep(1)
+                command(f'supervisor-survived-{fault.lower()}',
+                        f'test "$(cat /run/elo-client/supervisor.pid)" = {supervisor_pid}')
+                if recovered['digest'] != report['initial_health']['digest'] or frame(f'recovered-{fault.lower()}') != first:
+                    raise RuntimeError('Recuperação não restaurou a fixture inicial')
+                report['recovery'].append({'signal': fault, 'before': old, 'after': recovered})
+                report['checks'].append(f'recovered-after-{fault.lower()}')
+            report['supervisor_log'] = command('supervisor-diagnostics', 'cat /run/elo-client.log')
+            if 'presentation-stalled' not in report['supervisor_log']:
+                raise RuntimeError('Travamento com PID vivo não foi diagnosticado')
             send('poweroff')
             wait_for(rb'reboot: Power down')
             proc.wait(timeout=15)
@@ -212,14 +286,14 @@ def main():
                 proc.stdout.close()
             report['hashes_after'] = {p.name: digest(p) for p in images}
             log.flush()
-            match = re.search(rb'ACCEL=(\w+)', (out / 'gui-smoke.log').read_bytes())
+            match = re.search(rb'ACCEL=(\w+)', (out / f'{prefix}.log').read_bytes())
             report['qemu_acceleration'] = match[1].decode() if match else 'NOT_RECORDED'
             report['duration_seconds'] = round(time.monotonic() - started, 3)
             if report['hashes_before'] != report['hashes_after']:
                 report['status'] = 'FAIL'
                 report['error'] = 'Imagem base alterada'
-            (out / 'gui-smoke.json').write_text(json.dumps(report, indent=2) + '\n')
-    print(f'{report["status"]}: {profile}; {out / "gui-smoke.json"}')
+            (out / f'{prefix}.json').write_text(json.dumps(report, indent=2) + '\n')
+    print(f'{report["status"]}: {profile}; {out / (prefix + ".json")}')
     if report['status'] != 'PASS':
         print(report.get('error'), file=sys.stderr)
         return 1

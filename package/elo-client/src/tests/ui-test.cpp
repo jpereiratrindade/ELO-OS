@@ -1,5 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "ClientModel.hpp"
+#include "QtAdapters.hpp"
+#include <QCryptographicHash>
+#include <QFile>
+#include <QDir>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QTemporaryDir>
+#include <QCoreApplication>
 #include <QImage>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
@@ -11,9 +20,54 @@
 class UiTest : public QObject {
   Q_OBJECT
  private slots:
+  void runtimeHealthRequiresRenderedFrames() {
+    struct Network : elo::NetworkStatus {
+      bool up = true;
+      bool available() const override { return up; }
+    } network;
+    BootClock clock;
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto path = directory.path() + "/health";
+    ClientModel model;
+    QQmlApplicationEngine engine;
+    engine.rootContext()->setContextProperty("clientModel", &model);
+    engine.load(QUrl("qrc:/Main.qml"));
+    QVERIFY(!engine.rootObjects().isEmpty());
+    auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+    QVERIFY(window);
+    QtRuntime runtime(*window, model, clock, network, path, "qt-test-generation");
+    runtime.start();
+    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QTRY_COMPARE(model.state(), "READY_LOCAL");
+    auto record = [&path] {
+      QFile file(path);
+      if (!file.open(QIODevice::ReadOnly)) return QStringList{};
+      return QString::fromUtf8(file.readAll()).simplified().split(' ');
+    };
+    QTRY_VERIFY(record().size() == 8);
+    QCOMPARE(record()[0], "ELO_HEALTH_V1");
+    QCOMPARE(record()[1], "qt-test-generation");
+    QCOMPARE(record()[2], QString::number(QCoreApplication::applicationPid()));
+    const auto sequence = record()[4].toULongLong();
+    window->update();
+    QTRY_VERIFY(record()[4].toULongLong() > sequence);
+    const auto digest = model.presentationDigest();
+    network.up = false;
+    QTRY_COMPARE(model.state(), "DEGRADED_OFFLINE");
+    QTRY_COMPARE(record()[5], "DEGRADED_OFFLINE");
+    QCOMPARE(model.presentationDigest(), digest);
+    network.up = true;
+    QTRY_COMPARE(model.state(), "READY_LOCAL");
+    QTRY_COMPARE(record()[5], "READY_LOCAL");
+  }
   void rejectedFixtureNeverBecomesReady() {
     struct MissingCatalog : elo::ContentCatalog {
-      elo::LoadResult load() override { return {elo::LoadStatus::missing, {}}; }
+      bool restored = false;
+      elo::LoadResult load() override {
+        return restored ? elo::LoadResult{elo::LoadStatus::loaded, elo::local_fixture()}
+                        : elo::LoadResult{elo::LoadStatus::missing, {}};
+      }
     } catalog;
     ClientModel model(nullptr, &catalog);
     QQmlApplicationEngine engine;
@@ -32,6 +86,50 @@ class UiTest : public QObject {
     auto* body = window->findChild<QObject*>("pageBody");
     QVERIFY(body);
     QCOMPARE(body->property("text").toString(), model.error());
+    QVERIFY(model.canRetry());
+    auto* retry = window->findChild<QQuickItem*>("resetButton");
+    QVERIFY(retry);
+    QCOMPARE(retry->property("label").toString(), "Tentar novamente");
+    catalog.restored = true;
+    model.retry();
+    QTRY_COMPARE(model.state(), "READY_LOCAL");
+    QVERIFY(!model.canRetry());
+  }
+  void externalContentRequiresVerifiedBytes() {
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    QtLocalStore store(directory.path());
+    JsonCatalog catalog(store);
+    QCOMPARE(catalog.load().status, elo::LoadStatus::missing);
+    const auto payload = QJsonDocument(QJsonObject{
+      {"schema", 1}, {"id", "qt-store-test"}, {"name", "Fixture Qt"}, {"version", "1"},
+      {"pages", QJsonArray{QJsonObject{{"title", "Local"}, {"body", "Teste sem servidor."}}}}
+    }).toJson(QJsonDocument::Compact);
+    const auto digest = QString::fromLatin1(QCryptographicHash::hash(payload, QCryptographicHash::Sha256).toHex());
+    const auto bundle = directory.path() + "/bundles/" + digest;
+    QVERIFY(QDir().mkpath(bundle));
+    auto write = [](const QString& path, const QByteArray& data) {
+      QFile file(path);
+      return file.open(QIODevice::WriteOnly) && file.write(data) == data.size();
+    };
+    QVERIFY(write(bundle + "/presentation.json", payload));
+    QVERIFY(write(bundle + "/manifest.json", QJsonDocument(QJsonObject{
+      {"schema", 1}, {"file", "presentation.json"}, {"size", static_cast<int>(payload.size())}, {"sha256", digest}
+    }).toJson()));
+    QVERIFY(write(directory.path() + "/active.json", QJsonDocument(QJsonObject{{"bundle", digest}}).toJson()));
+    ClientModel model(nullptr, &catalog);
+    model.start();
+    QCOMPARE(model.state(), "BOOTING");
+    model.presentationReady();
+    QCOMPARE(model.state(), "READY_LOCAL");
+    QCOMPARE(model.title(), "Local");
+    QVERIFY(write(bundle + "/presentation.json", payload.left(payload.size() - 1)));
+    ClientModel corrupted(nullptr, &catalog);
+    corrupted.start();
+    corrupted.presentationReady();
+    QCOMPARE(corrupted.state(), "ERROR_RECOVERABLE");
+    QVERIFY(write(directory.path() + "/active.json", "{\"bundle\":\"../escape\"}"));
+    QCOMPARE(store.read_active().status, elo::LoadStatus::invalid);
   }
   void localPresentation() {
     ClientModel model;
@@ -57,6 +155,15 @@ class UiTest : public QObject {
     QVERIFY(!first.isEmpty());
     QTest::keyClick(window, Qt::Key_Right);
     QTRY_COMPARE(model.pageNumber(), 2);
+    const auto before_network = model.presentationDigest();
+    model.setNetworkAvailable(true);
+    model.setNetworkAvailable(false);
+    QCOMPARE(model.state(), "DEGRADED_OFFLINE");
+    QCOMPARE(model.presentationDigest(), before_network);
+    QCOMPARE(model.pageNumber(), 2);
+    model.setNetworkAvailable(true);
+    QCOMPARE(model.state(), "READY_LOCAL");
+    QVERIFY(model.connectivity().contains("servidor não verificado"));
     QTRY_COMPARE(counter->property("text").toString(), "2 / 3");
     QVERIFY(title->property("text").toString() != first);
     QTest::keyClick(window, Qt::Key_Left);

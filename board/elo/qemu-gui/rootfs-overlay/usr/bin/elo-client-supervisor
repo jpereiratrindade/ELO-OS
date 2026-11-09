@@ -1,0 +1,151 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-only
+# Experimental GUI profiles only. Health is advancing rendered frames, not PID.
+set -uf
+umask 077
+runtime=${ELO_RUNTIME_DIR:-/run/elo-client}
+startup_ms=${ELO_STARTUP_TIMEOUT_MS:-30000}
+health_ms=${ELO_HEALTH_TIMEOUT_MS:-7000}
+grace_ms=${ELO_TERMINATE_GRACE_MS:-2000}
+base_ms=${ELO_BACKOFF_MS:-1000}
+maximum_ms=${ELO_MAX_BACKOFF_MS:-30000}
+window_ms=${ELO_RESTART_WINDOW_MS:-300000}
+limit=${ELO_RESTART_LIMIT:-5}
+stable_ms=${ELO_STABLE_MS:-60000}
+poll=${ELO_POLL_SECONDS:-1}
+number() {
+    case "$1" in ''|*[!0-9]*) return 1 ;; esac
+    case "$1" in 0|[1-9]*) ;; *) return 1 ;; esac
+    [ "${#1}" -le 15 ]
+}
+for value in "$startup_ms" "$health_ms" "$grace_ms" "$base_ms" "$maximum_ms" "$window_ms" "$limit" "$stable_ms"; do
+    number "$value" && [ "$value" -gt 0 ] || { echo 'supervisor: invalid policy' >&2; exit 2; }
+done
+[ "$maximum_ms" -ge "$base_ms" ] && [ "$limit" -le 20 ] || exit 2
+case "$poll" in 0.1|0.25|0.5|1) ;; *) exit 2 ;; esac
+[ "$#" -ge 1 ] || { echo 'Usage: elo-client-supervisor CLIENT [ARGS...]' >&2; exit 2; }
+mkdir -p "$runtime" || exit 2
+chmod 700 "$runtime" || exit 2
+# A kernel lock survives stale PID files and is released if the supervisor dies.
+# flock is enabled in the pinned Buildroot BusyBox configuration.
+exec 9> "$runtime/.supervisor.lock"
+flock -n 9 || { echo 'supervisor already-running'; exit 0; }
+child=
+stopping=0
+recent=
+delay_ms=$base_ms
+now=0
+clock_ms() {
+    # Linux /proc/uptime uses CLOCK_BOOTTIME and two decimal places.
+    # Do not use ash's read builtin on procfs after a trapped signal: the
+    # BusyBox build used by the console baseline can spin there during stop.
+    uptime=$(cat /proc/uptime) || exit 2
+    uptime=${uptime%% *}
+    seconds=${uptime%.*}
+    fraction=${uptime#*.}
+    now=$((seconds * 1000 + (1$fraction - 100) * 10))
+}
+running() {
+    [ -n "$child" ] && kill -0 "$child" 2>/dev/null || return 1
+    stat=$(cat "/proc/$child/stat" 2>/dev/null) || return 1
+    fields=${stat##*) }
+    case "${fields%% *}" in Z|X) return 1 ;; esac
+}
+read_health() {
+    health_record=$(cat "$runtime/health" 2>/dev/null) || return 1
+    set -- $health_record
+    [ "$#" -eq 8 ] || return 1
+    magic=$1 token=$2 pid=$3 stamp=$4 frame=$5 state=$6 page=$7 digest=$8
+}
+stop_child() {
+    if [ -n "$child" ]; then
+        kill -TERM "$child" 2>/dev/null || :
+        clock_ms
+        end=$((now + grace_ms))
+        while running; do
+            clock_ms
+            [ "$now" -lt "$end" ] || break
+            sleep "$poll"
+        done
+        if running; then kill -KILL "$child" 2>/dev/null || :; fi
+        child_exit=0
+        wait "$child" 2>/dev/null || child_exit=$?
+        child=
+    fi
+    rm -f "$runtime/child.pid" "$runtime/health"
+}
+cleanup() {
+    stop_child
+    rm -f "$runtime/supervisor.pid"
+}
+trap 'stopping=1' TERM INT HUP
+trap cleanup 0
+printf '%s\n' "$$" > "$runtime/supervisor.pid"
+while [ "$stopping" -eq 0 ]; do
+    generation=$(cat /proc/sys/kernel/random/uuid) || exit 2
+    rm -f "$runtime/health"
+    "$@" --health-file "$runtime/health" --health-token "$generation" 9>&- &
+    child=$!
+    printf '%s\n' "$child" > "$runtime/.child.pid"
+    mv "$runtime/.child.pid" "$runtime/child.pid"
+    echo "supervisor spawn pid=$child generation=$generation"
+    clock_ms
+    started=$now
+    progress=$now
+    healthy_since=$now
+    observed=0
+    sequence=0
+    reason=process-exit
+    while [ "$stopping" -eq 0 ] && running; do
+        clock_ms
+        if [ -s "$runtime/health" ]; then
+            magic= token= pid= stamp= frame= state= page= digest=
+            if read_health &&
+               [ "$magic" = ELO_HEALTH_V1 ] && [ "$token" = "$generation" ] && [ "$pid" = "$child" ] &&
+               number "$stamp" && number "$frame" && number "$page" &&
+               [ "$frame" -gt "$sequence" ] && [ "$stamp" -le "$((now + 1000))" ] &&
+               [ "$((now - stamp))" -le "$health_ms" ] && [ "${#digest}" -eq 64 ]; then
+                case "$digest" in *[!0-9a-f]*) valid=0 ;; *) valid=1 ;; esac
+                case "$state" in READY_LOCAL|DEGRADED_OFFLINE|ERROR_RECOVERABLE|ERROR_FATAL) ;; *) valid=0 ;; esac
+                if [ "$valid" -eq 1 ]; then
+                    [ "$observed" -eq 1 ] || healthy_since=$now
+                    observed=1
+                    sequence=$frame
+                    progress=$now
+                fi
+            fi
+        fi
+        if [ "$observed" -eq 0 ] && [ "$((now - started))" -ge "$startup_ms" ]; then
+            reason=startup-timeout; break
+        fi
+        if [ "$observed" -eq 1 ] && [ "$((now - progress))" -ge "$health_ms" ]; then
+            reason=presentation-stalled; break
+        fi
+        if [ "$observed" -eq 1 ] && [ "$((now - healthy_since))" -ge "$stable_ms" ]; then delay_ms=$base_ms; fi
+        sleep "$poll"
+    done
+    stop_child
+    [ "$stopping" -eq 0 ] || break
+    echo "supervisor child-exit status=$child_exit reason=$reason"
+    clock_ms
+    kept=
+    count=0
+    for tick in $recent; do
+        if [ "$((now - tick))" -lt "$window_ms" ]; then kept="$kept $tick"; count=$((count + 1)); fi
+    done
+    if [ "$count" -ge "$limit" ]; then
+        echo "supervisor give-up reason=$reason restarts=$count window_ms=$window_ms" >&2
+        exit 1
+    fi
+    recent="$kept $now"
+    echo "supervisor backoff_ms=$delay_ms reason=$reason"
+    resume=$((now + delay_ms))
+    while [ "$stopping" -eq 0 ]; do
+        clock_ms
+        [ "$now" -lt "$resume" ] || break
+        sleep "$poll"
+    done
+    delay_ms=$((delay_ms * 2))
+    [ "$delay_ms" -le "$maximum_ms" ] || delay_ms=$maximum_ms
+done
+echo 'supervisor stopped'

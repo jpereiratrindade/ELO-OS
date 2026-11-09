@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "client.hpp"
+#include "ports.hpp"
 #include <utility>
 
 namespace elo {
@@ -15,14 +16,20 @@ bool valid(const Fixture& fixture) {
   if (fixture.id.empty() || fixture.name.empty() || fixture.version != "1" ||
       fixture.pages.empty() || fixture.pages.size() > 32 || fixture.id.size() > 128 || fixture.name.size() > 256)
     return false;
-  for (const auto& page : fixture.pages)
+  if (fixture.id.find('\0') != std::string::npos || fixture.name.find('\0') != std::string::npos) return false;
+  for (const auto& page : fixture.pages) {
     if (page.title.empty() || page.title.size() > 256 || page.body.empty() || page.body.size() > 4096)
       return false;
+    else if (page.title.find('\0') != std::string::npos || page.body.find('\0') != std::string::npos) return false;
+  }
   return true;
 }
 }
 bool Client::dispatch(const Event& event) {
-  return std::visit([this](const auto& value) { return handle(value); }, event);
+  const auto before = state_;
+  const auto changed = std::visit([this](const auto& value) { return handle(value); }, event);
+  if (diagnostics_ && before != state_) diagnostics_->transition(before, state_);
+  return changed;
 }
 bool Client::handle(Start) {
   if (loaded_ || state_ != State::booting) return false;
@@ -83,7 +90,10 @@ bool Client::handle(Retry) {
   return handle(Start{});
 }
 std::string_view Client::state_name() const {
-  switch (state_) {
+  return elo::state_name(state_);
+}
+std::string_view state_name(State state) {
+  switch (state) {
     case State::booting: return "BOOTING";
     case State::ready_local: return "READY_LOCAL";
     case State::connecting: return "CONNECTING";

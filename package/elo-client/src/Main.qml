@@ -72,6 +72,7 @@ Window {
             }
             Text {
                 objectName: "pageTitle"
+                textFormat: Text.PlainText
                 text: clientModel.title
                 width: parent.width
                 wrapMode: Text.WordWrap
@@ -81,6 +82,7 @@ Window {
             }
             Text {
                 objectName: "pageBody"
+                textFormat: Text.PlainText
                 text: clientModel.body
                 width: parent.width
                 wrapMode: Text.WordWrap
@@ -95,14 +97,20 @@ Window {
             anchors.bottomMargin: 24
             spacing: 12
             LocalButton { objectName: "previousButton"; label: "Voltar"; enabled: clientModel.canPrevious; onActivated: clientModel.previous() }
-            LocalButton { objectName: "resetButton"; label: "Recomeçar"; enabled: clientModel.pageCount > 0 && clientModel.error.length === 0; onActivated: clientModel.reset() }
+            LocalButton {
+                objectName: "resetButton"
+                label: clientModel.canRetry ? "Tentar novamente" : "Recomeçar"
+                enabled: clientModel.canRetry || (clientModel.pageCount > 0 && clientModel.error.length === 0)
+                onActivated: clientModel.canRetry ? clientModel.retry() : clientModel.reset()
+            }
             LocalButton { objectName: "nextButton"; label: "Continuar"; enabled: clientModel.canNext; onActivated: clientModel.next() }
         }
         Text {
             id: footer
+            textFormat: Text.PlainText
             anchors.left: parent.left
             anchors.bottom: parent.bottom
-            text: clientModel.state + " · " + clientModel.fixtureLabel + "\nNo seu tempo. Sem conexão necessária."
+            text: clientModel.state + " · " + clientModel.fixtureLabel + "\n" + clientModel.connectivity + "\nNo seu tempo. Sem conexão necessária."
             color: "#8da7ad"
             font.pixelSize: 15
         }

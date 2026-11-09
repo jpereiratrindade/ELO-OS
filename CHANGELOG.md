@@ -2,8 +2,13 @@
 
 ## [Unreleased] — desenvolvimento após o scaffold
 
+- T-203/T-205: portas explícitas e adaptadores Linux/Qt para conteúdo, link local, relógio, frames e diagnósticos; conectividade observável e retry de falha recuperável. Código novo aguarda compilação no desktop por decisão do mantenedor.
+- T-209: publicador de fixture local com tamanho/SHA-256, staging, fsync, bundle imutável e marcador atômico; falha após publicação reporta durabilidade incerta. Testes de host incluem corrupção, ENOSPC e leitores concorrentes. Sem `/data` ou protocolo.
+- T-210: ledger C++ de teste em memória, chave/payload imutáveis, conflito explícito e reenvio limitado; testes adicionados, ainda não compilados/executados.
+- T-211: supervisor exclusivo dos perfis GUI, saúde por frames crescentes/PID/geração, backoff e orçamento de reinícios. Testes shell com processo simulado passam no Fedora e no BusyBox existente; integração Qt real pendente. Smoke QEMU ampliado para queda/reconexão e SIGKILL/SIGSTOP, ainda não executado.
+
 - IMPL-002 incorporado sem alterações; núcleo portátil C++23, fixture local validada, eventos tipados e confirmação de apresentação antes de READY_LOCAL. Testes de falha/retry e eventos offline, frontend Qt/QML testado no Fedora e núcleo AArch64 executado em QEMU user; C++26 permanece experimento do subconjunto usado.
-- Perfis gráficos QEMU opt-in isolados, Qt Quick por software/LinuxFB/DRM/VirtIO GPU, smoke de framebuffer/entrada sem NIC. Build/boot gráfico têm gates próprios; supervisão e hardware Pi 5 pendentes.
+- Perfis gráficos QEMU opt-in isolados, Qt Quick por software/LinuxFB/DRM/VirtIO GPU, smoke de framebuffer/entrada sem NIC. Build/boot gráfico e integração da supervisão têm gates próprios; hardware Pi 5 pendente.
 - CI acrescenta contratos do núcleo e Qt/Xvfb de host; regressão dos seis boots de console passou após extensão do lançador, sem alterar hashes históricos.
 - `fsck.fat -n -v` repetido com código zero e hash FAT preservado; documento registra a saída apresentada pelo operador e a inspeção local.
 - Pré-checagem Pi 5 somente leitura: SHA-256 esperado, limites MBR, assinaturas FAT/ext4 e relatório JSON; testes negativos no Q0 e modelo de evidência física. Boot físico continua pendente.

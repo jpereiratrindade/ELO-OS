@@ -14,12 +14,16 @@ check_cxx_source_compiles("
   #include <string_view>
   #include <variant>
   #include <vector>
+  #include <map>
+  #include <cstdint>
   int main() {
     std::variant<std::string, std::string_view> event{std::string{\"fixture\"}};
     std::vector<std::string> pages{\"local\"};
-    return std::visit([](const auto& value) { return value.empty(); }, event) || pages.empty();
-  }" ELO_CORE_CXX${ELO_CXX_STANDARD}_COMPILES)
-if(NOT ELO_CORE_CXX${ELO_CXX_STANDARD}_COMPILES)
+    std::map<std::string, std::uint64_t> pending;
+    pending.emplace(pages.front(), 1);
+    return std::visit([](const auto& value) { return value.empty(); }, event) || pending.empty();
+  }" ELO_CORE_CXX${ELO_CXX_STANDARD}_LOCAL_CONTRACTS_COMPILES)
+if(NOT ELO_CORE_CXX${ELO_CXX_STANDARD}_LOCAL_CONTRACTS_COMPILES)
   message(FATAL_ERROR "Compiler/library cannot build the core's required standard library features")
 endif()
 option(ELO_BUILD_GUI "Build the Qt Quick frontend" ON)
@@ -32,7 +36,7 @@ install(TARGETS elo-client-core RUNTIME DESTINATION bin)
 if(ELO_BUILD_GUI)
   find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Quick Qml)
   set(CMAKE_AUTOMOC ON)
-  qt_add_executable(elo-client main.cpp ClientModel.cpp ClientModel.hpp)
+  qt_add_executable(elo-client main.cpp ClientModel.cpp ClientModel.hpp QtAdapters.cpp QtAdapters.hpp)
   qt_add_resources(elo-client "elo_ui" PREFIX "/" FILES Main.qml)
   target_link_libraries(elo-client PRIVATE elo-core Qt6::Core Qt6::Gui Qt6::Quick Qt6::Qml)
   install(TARGETS elo-client RUNTIME DESTINATION bin)
@@ -44,7 +48,7 @@ if(ELO_BUILD_TESTS)
   add_test(NAME elo-core-contract COMMAND elo-core-test)
   if(ELO_BUILD_GUI)
     find_package(Qt6 REQUIRED COMPONENTS Test)
-    qt_add_executable(elo-ui-test tests/ui-test.cpp ClientModel.cpp ClientModel.hpp)
+    qt_add_executable(elo-ui-test tests/ui-test.cpp ClientModel.cpp ClientModel.hpp QtAdapters.cpp QtAdapters.hpp)
     qt_add_resources(elo-ui-test "elo_test_ui" PREFIX "/" FILES Main.qml)
     target_link_libraries(elo-ui-test PRIVATE elo-core Qt6::Core Qt6::Gui Qt6::Quick Qt6::Qml Qt6::Test)
     add_test(NAME elo-ui-contract COMMAND elo-ui-test)

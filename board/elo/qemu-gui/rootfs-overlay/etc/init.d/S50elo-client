@@ -1,9 +1,10 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-3.0-only
-# Experimental virtual GUI only; no process supervision or production policy.
-PIDFILE=/run/elo-client.pid
+# Experimental virtual GUI only; no physical Pi 5 service is changed.
+PIDFILE=/run/elo-client/supervisor.pid
 case "$1" in
   start)
+    if test -s "$PIDFILE" && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then exit 0; fi
     export QT_QPA_PLATFORM=linuxfb
     export QT_QPA_FB_DRM=1
     export QT_QUICK_BACKEND=software
@@ -11,12 +12,22 @@ case "$1" in
     export XDG_RUNTIME_DIR=/run/elo-client
     mkdir -p "$XDG_RUNTIME_DIR"
     chmod 700 "$XDG_RUNTIME_DIR"
-    start-stop-daemon -S -b -m -p "$PIDFILE" -O /run/elo-client.log -x /usr/bin/elo-client -- --fullscreen
+    start-stop-daemon -S -b -p "$PIDFILE" -O /run/elo-client.log -x /usr/bin/elo-client-supervisor -- /usr/bin/elo-client --fullscreen
+    for attempt in 1 2 3 4 5; do
+      if test -s "$PIDFILE" && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then exit 0; fi
+      sleep 1
+    done
+    echo 'Supervisor did not start' >&2
+    exit 1
     ;;
   stop)
-    start-stop-daemon -K -p "$PIDFILE" -x /usr/bin/elo-client
-    rm -f "$PIDFILE"
+    start-stop-daemon -K -p "$PIDFILE"
+    for attempt in 1 2 3 4 5; do
+      test ! -e "$PIDFILE" && break
+      sleep 1
+    done
+    test ! -e "$PIDFILE" || { echo 'Supervisor did not stop' >&2; exit 1; }
     ;;
-  restart) "$0" stop; "$0" start ;;
+  restart) "$0" stop && "$0" start ;;
   *) echo "Usage: $0 {start|stop|restart}" >&2; exit 2 ;;
 esac

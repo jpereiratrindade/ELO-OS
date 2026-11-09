@@ -45,6 +45,10 @@ esac
 display=(-display none)
 memory=512M
 if [[ "$GRAPHICS" == 1 ]]; then
+  if [[ ${QEMU_NETWORK:-user} == user ]]; then
+    if [[ "$ARCH" == aarch64 ]]; then net_device=virtio-net-device; else net_device=virtio-net-pci; fi
+    network=(-netdev user,id=net0 -device "$net_device,netdev=net0,id=elo-net")
+  fi
   memory=1024M
   display=(-display "${QEMU_DISPLAY:-gtk}" -device virtio-gpu-pci,xres=1024,yres=768
     -device virtio-keyboard-pci -device virtio-mouse-pci)

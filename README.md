@@ -45,6 +45,8 @@ Próxima etapa: executar `python3 scripts/pi5-preflight.py` no Fedora e seguir o
 
 ### Segundo marco: P2, apresentação local
 
+**Próxima validação no desktop:** novos adaptadores de conteúdo/conectividade, modelo idempotente e supervisão estão implementados, com C++/Qt e boot gráfico ainda por validar. O build do laptop foi encerrado a pedido do mantenedor. Consulte o [roteiro de compilação e testes](docs/tests/desktop-validation.md); os PASS anteriores continuam vinculados às suas fontes e artefatos históricos.
+
 O núcleo C++ começa sem rede e oferece três páginas locais com navegação e reinício. O frontend Qt Quick observa os estados e encaminha teclado/botões. É uma apresentação básica de disponibilidade; ainda não implementa protocolo ELO, conteúdo do servidor, cache, identidade pessoal ou sincronização.
 
 No Fedora com dependências Qt de desenvolvimento disponíveis:
@@ -56,7 +58,7 @@ No Fedora com dependências Qt de desenvolvimento disponíveis:
 
 Build nativo em `build/client-fedora/`, separado do Buildroot. O padrão é C++23 portátil; C++26 é um perfil experimental explícito, avaliado pelo código e testes reais. Consulte o [contrato e comandos de teste do cliente](tests/client/README.md) e a [decisão arquitetural](docs/adr/ADR-009-local-client.md).
 
-Para a bancada gráfica, use `PROFILE=qemu-x86_64-gui` ou `PROFILE=qemu-aarch64-gui` com `scripts/build.sh` e `scripts/run-qemu.sh`. Cada perfil tem saída própria em `output/`, Qt Quick por software, LinuxFB/DRM, VirtIO GPU e apresentação em tela cheia. O teste `tests/client/qemu-gui-smoke.py` remove a NIC virtual e exercita o framebuffer e o teclado. Essa pilha não comprova EGLFS/V3D na Pi 5; não habilite o cliente no perfil físico antes de configurar e validar sua pilha gráfica.
+Para a bancada gráfica, use `PROFILE=qemu-x86_64-gui` ou `PROFILE=qemu-aarch64-gui` com `scripts/build.sh` e `scripts/run-qemu.sh`. Cada perfil tem saída própria em `output/`, Qt Quick por software, LinuxFB/DRM, VirtIO GPU e apresentação em tela cheia. O teste `tests/client/qemu-gui-smoke.py` prevê partida sem NIC, framebuffer/teclado e recuperação de processo; o cenário `QEMU_GUI_NETWORK=user` verifica perda/reconexão do link. Esses ensaios ainda aguardam imagem concluída. Essa pilha não comprova EGLFS/V3D na Pi 5; não habilite o cliente no perfil físico antes de configurar e validar sua pilha gráfica.
 
 ### Desenvolvimento no Fedora com QEMU
 
