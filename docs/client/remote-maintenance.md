@@ -95,3 +95,15 @@ era uma lacuna constatada na imagem, não uma causa única comprovada da ausênc
 Wi-Fi, roteamento entre visitantes/cabo e firmware precisam de ensaio físico.
 
 [Evidência da nova imagem](../evidence/C7-REMOTE-MAINTENANCE-20261110.md).
+
+## Recuperação depois de indisponibilidade de rede
+
+Após erro de transporte, cliente descarta conexões HTTP reutilizáveis antes da
+próxima tentativa em que gerenciador estiver livre. Não interrompe requisição em
+andamento nem reinicia apresentação. Tentativas continuam com intervalo limitado a
+60 segundos; cache permanece disponível. CA, hostname e datas TLS continuam validados.
+
+Wi-Fi solicita respostas DHCP por broadcast, envia hostname e tenta novamente após
+três segundos quando não recebe concessão. Associação ao AP não garante endereço IP:
+`wpa_state=COMPLETED` e IPv4 devem ser conferidos separadamente em `elo-diagnose`.
+Restrições da rede de visitantes não podem ser removidas pelo cliente.

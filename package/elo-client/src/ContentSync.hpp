@@ -16,6 +16,7 @@ class ContentSync final : public QObject {
   QString configure();
   void start();
  private:
+  void refreshNetwork();
   void fetch();
   void finish();
   void fail();
@@ -29,6 +30,7 @@ class ContentSync final : public QObject {
   bool insecure_;
   QSslConfiguration tls_;
   QNetworkAccessManager manager_;
+  bool reset_connections_ = false;
   QNetworkReply* reply_ = nullptr;
   QTimer timer_;
   QTimer deadline_;

@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import ssl
+import socket
 import subprocess
 import sys
 import tempfile
@@ -176,6 +177,21 @@ class DistributionTest(unittest.TestCase):
         self.wait(lambda: 'Servidor indisponível' in log.read_text())
         self.wait(lambda: len(self.frame(health)) == 8 and self.frame(health)[7] == expected)
         self.assertIn(self.frame(health)[5], ('READY_LOCAL', 'DEGRADED_OFFLINE'))
+
+    def test_recovers_when_server_appears_after_offline_boot(self):
+        self.seeded_cache()
+        with socket.socket() as reserved:
+            reserved.bind(('127.0.0.1', 0))
+            port = reserved.getsockname()[1]
+        child, health, log = self.launch(port)
+        self.wait(lambda: 'fetch_failed' in log.read_text())
+        self.wait(lambda: len(self.frame(health)) == 8 and self.frame(health)[5] == 'READY_LOCAL')
+        service = elo_server.server(self.bundle, ['text'], self.token, port=port)
+        self.listen(service)
+        self.wait(lambda: 'conteúdo recebido (HTTP)' in log.read_text(), timeout=20)
+        self.wait(lambda: service.receipts.record and service.receipts.record.get('display'), timeout=20)
+        self.assertIsNone(child.poll())
+        self.assertEqual(content.read_active(self.cache)['id'], 'test-application')
 
     def test_reports_exact_content_after_a_rendered_frame(self):
         port = self.actual_server()

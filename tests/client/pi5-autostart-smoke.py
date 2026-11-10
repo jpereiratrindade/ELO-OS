@@ -165,6 +165,25 @@ def main():
                         time.sleep(1)
                     assert maintenance.report and maintenance.report.get('display'), 'Native terminal did not report to server'
                     report['checks'].append('native-presentation-report-after-clock-sync')
+                    # Serial console remains available while server and SSH route is lost.
+                    before_pid = maintenance.ssh('cat /run/elo-client/child.pid').stdout.strip()
+                    command('lose-server-route', 'echo ELO_TEST_ROUTE_LOSS >> /run/elo-client/client.log; ip route add unreachable 10.0.2.2/32')
+                    try:
+                        command('observe-offline-retry',
+                            'found=0; for n in $(seq 1 75); do '
+                            "if sed -n '/ELO_TEST_ROUTE_LOSS/,$p' /run/elo-client/client.log | grep -q fetch_failed; "
+                            'then found=1; break; fi; sleep 1; done; test "$found" = 1')
+                    finally:
+                        command('restore-server-route', 'ip route del unreachable 10.0.2.2/32')
+                    downloads = maintenance.downloads
+                    sequence = maintenance.report.get('sequence', 0)
+                    deadline = time.monotonic() + 90
+                    while time.monotonic() < deadline:
+                        if maintenance.downloads > downloads and maintenance.report.get('sequence', 0) > sequence: break
+                        time.sleep(1)
+                    else: raise AssertionError('Client did not recover after server route returned')
+                    assert maintenance.ssh('cat /run/elo-client/child.pid').stdout.strip() == before_pid
+                    report['checks'].append('route-loss-and-recovery-without-client-restart')
                     stopped = maintenance.ssh('/etc/init.d/S50elo-client stop; echo MAINTENANCE_ALIVE')
                     assert stopped.returncode == 0 and 'MAINTENANCE_ALIVE' in stopped.stdout
                     assert maintenance.ssh('test ! -e /run/elo-client/child.pid; echo SSH_STILL_ALIVE').returncode == 0

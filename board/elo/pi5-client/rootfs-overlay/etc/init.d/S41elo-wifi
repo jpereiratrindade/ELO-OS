@@ -17,7 +17,7 @@ case "$1" in
     ip link set wlan0 up || exit 1
     wpa_supplicant -B -P "$PIDFILE" -i wlan0 -D nl80211 -c "$CONFIG" || exit 1
     # DHCP is asynchronous so a missing AP does not block console login.
-    if ! udhcpc -b -t 1 -T 1 -i wlan0 -p /run/elo-wifi-dhcp.pid; then
+    if ! udhcpc -b -B -t 3 -T 3 -A 3 -R -O search -O staticroutes -x hostname:$(hostname) -i wlan0 -p /run/elo-wifi-dhcp.pid; then
       "$0" stop
       exit 1
     fi

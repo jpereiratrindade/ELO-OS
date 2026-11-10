@@ -156,7 +156,16 @@ QString ContentSync::configure() {
   return {};
 }
 void ContentSync::start() { timer_.start(0); }
+void ContentSync::refreshNetwork() {
+  // Failed sockets can retain the old route after an interface/address change.
+  // Refresh only while idle; never interrupt an active publication or receipt.
+  if (reset_connections_ && !reply_ && !report_reply_) {
+    manager_.clearConnectionCache();
+    reset_connections_ = false;
+  }
+}
 void ContentSync::fetch() {
+  refreshNetwork();
   const auto token = credential(token_file_);
   if (token.isEmpty()) { qWarning() << "elo-client credential_unavailable"; fail(); return; }
   model_.setServerStatus(insecure_ ? "Servidor local de teste · consultando publicação"
@@ -197,6 +206,7 @@ void ContentSync::finish() {
       || response_.size() > limit || !reply->header(QNetworkRequest::ContentTypeHeader).toString().startsWith("application/json")) {
     qWarning() << "elo-client fetch_failed network=" << int(reply->error())
                << "http=" << reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    reset_connections_ = reply->error() != QNetworkReply::NoError;
     fail(); return;
   }
   const auto object = QJsonDocument::fromJson(response_).object();
@@ -228,6 +238,7 @@ void ContentSync::scheduleReport() {
 }
 void ContentSync::report() {
   if (report_reply_ || (received_.isEmpty() && presented_.isEmpty())) return;
+  refreshNetwork();
   const auto token = credential(token_file_);
   if (token.isEmpty()) {
     report_timer_.start(report_retry_ms_);
@@ -268,6 +279,7 @@ void ContentSync::report() {
     } else {
       qWarning() << "elo-client report_failed network=" << int(reply->error())
                  << "http=" << reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+      reset_connections_ = reply->error() != QNetworkReply::NoError;
       report_timer_.start(report_retry_ms_);
       report_retry_ms_ = std::min(report_retry_ms_ * 2, 60000);
     }
