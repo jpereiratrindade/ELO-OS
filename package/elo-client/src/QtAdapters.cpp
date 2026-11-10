@@ -75,6 +75,7 @@ elo::LoadResult JsonCatalog::load() {
       return {elo::LoadStatus::invalid, {}};
     fixture.pages.push_back({page["title"].toString().toStdString(), page["body"].toString().toStdString()});
   }
+  fixture.content_hash = QCryptographicHash::hash(QByteArray::fromStdString(stored.utf8), QCryptographicHash::Sha256).toHex().toStdString();
   return {elo::LoadStatus::loaded, std::move(fixture)};  // Core also checks version/text limits.
 }
 bool LinuxNetworkStatus::available() const {
@@ -104,10 +105,22 @@ QtRuntime::QtRuntime(QQuickWindow& window, ClientModel& model, const elo::Clock&
       health_file_(std::move(health_file)), token_(std::move(token)) {
   timer_.setInterval(2000);
   QObject::connect(&timer_, &QTimer::timeout, this, [this] { sample(); });
+  // During synchronization the GUI thread is blocked. Copy identity with the
+  // scene being rendered, rather than reading newer model state after a queued frame.
+  QObject::connect(&window_, &QQuickWindow::beforeSynchronizing, this, [this] {
+    rendering_page_ = model_.presentationDigest();
+    rendering_content_ = model_.contentDigest();
+  }, Qt::DirectConnection);
   QObject::connect(&window_, &QQuickWindow::frameSwapped, this, [this] {
-    model_.presentationReady();
-    record_frame();
-  }, Qt::QueuedConnection);
+    const auto page = rendering_page_;
+    const auto content = rendering_content_;
+    QMetaObject::invokeMethod(this, [this, page, content] {
+      if (page != model_.presentationDigest() || content != model_.contentDigest()) return;
+      model_.presentationReady();
+      model_.confirmPresented(content);
+      record_frame();
+    }, Qt::QueuedConnection);
+  }, Qt::DirectConnection);
 }
 void QtRuntime::start() {
   model_.setNetworkAvailable(network_.available());
@@ -116,6 +129,7 @@ void QtRuntime::start() {
   window_.update();
 }
 void QtRuntime::sample() {
+  model_.checkContent();
   model_.setNetworkAvailable(network_.available());
   window_.update();  // Challenge the presentation path, even for a static page.
 }

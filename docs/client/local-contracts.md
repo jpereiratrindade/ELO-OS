@@ -25,7 +25,14 @@ A publicação serializa escritores com `flock`, escreve arquivos em staging no 
 
 Falha antes da troca do marcador preserva o ativo anterior. Falha após a troca, antes de confirmar durabilidade, retorna `ActivationUncertain`/código CLI 3: o novo ativo pode já estar visível; é preciso reler/reconciliar. Não se anuncia rollback automático nesse caso. Bundles anteriores permanecem disponíveis para reativação explícita e não há coleta automática. SHA-256 prova integridade em relação aos metadados fornecidos, sem autenticar autoria.
 
-`QtLocalStore` relê o marcador/manifesto, restringe o identificador do diretório, limita leituras e confere tamanho/hash. `JsonCatalog` adapta JSON para o domínio; o núcleo valida versão e limites antes de permitir READY_LOCAL. `--content-dir` habilita esse caminho explicitamente. A opção padrão continua sendo a fixture incorporada. Não há hot reload, instalação persistente em `/data` ou atualização de SO.
+`QtLocalStore` relê o marcador/manifesto, restringe o identificador do diretório, limita leituras e confere tamanho/hash. `JsonCatalog` adapta JSON para o domínio; o núcleo valida versão e limites antes de permitir READY_LOCAL. `--content-dir` habilita esse caminho explicitamente. A opção padrão continua sendo a fixture incorporada. Com `--content-dir`, o runtime verifica novas ativações a cada dois segundos.
+O núcleo anuncia atualização disponível sem trocar conteúdo ou página em uso.
+Recomeçar/Home revalida o catálogo e aplica a publicação atual apenas se válida;
+depois exige confirmação de frame antes de declarar prontidão. Duplicatas não
+reiniciam navegação. Falhas de atualização ficam separadas do erro de apresentação,
+invalidam candidatos pendentes e preservam o conteúdo em memória. Um apontador
+restaurado limpa o aviso. Isso não recupera automaticamente o disco após reinício.
+Não há instalação automática em `/data` ou atualização de SO.
 
 Os testes de falha usam diretório descartável e exceções injetadas, inclusive após publicação; não simulam fisicamente queda de energia. O diretório de conteúdo pertence ao operador confiável e deve permanecer sem escritores externos ao protocolo.
 

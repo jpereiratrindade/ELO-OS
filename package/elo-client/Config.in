@@ -3,8 +3,12 @@ config BR2_PACKAGE_ELO_CLIENT
     depends on BR2_PACKAGE_QT6BASE_GUI
     depends on BR2_PACKAGE_QT6DECLARATIVE
     depends on BR2_PACKAGE_QT6DECLARATIVE_QUICK
+    select BR2_PACKAGE_QT6BASE_NETWORK
+    select BR2_PACKAGE_OPENSSL
+    select BR2_PACKAGE_CA_CERTIFICATES
     help
       Núcleo portátil e apresentação local Qt/QML, com observação
       do link local, sem depender de rede para apresentar a fixture.
-      Não implementa o protocolo nem o domínio ELO.
+      Distribuição textual HTTPS opcional com cache local e credencial individual.
+      Não implementa a totalidade do domínio ELO.
       Exige configuração apropriada da pilha gráfica DRM/KMS.

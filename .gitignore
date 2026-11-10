@@ -26,3 +26,6 @@
 /.env
 /data/
 /secrets/
+
+# Cache Python local
+__pycache__/

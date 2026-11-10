@@ -69,8 +69,37 @@ bool Client::handle(Previous) {
   --index_;
   return true;
 }
+bool Client::handle(CheckContent) {
+  if (!catalog_ || !usable()) return false;
+  const auto previous = content_update_;
+  auto result = catalog_->load();
+  if (result.status != LoadStatus::loaded || !valid(result.fixture)) {
+    pending_.reset();
+    content_update_ = ContentUpdate::rejected;
+  } else if (result.fixture == fixture_) {
+    pending_.reset();
+    content_update_ = ContentUpdate::none;
+  } else {
+    pending_ = std::move(result.fixture);
+    content_update_ = ContentUpdate::available;
+  }
+  return previous != content_update_;
+}
 bool Client::handle(Reset) {
-  if (!usable() || index_ == 0) return false;
+  if (!usable()) return false;
+  // Revalidate the current pointer at the session boundary, including revocation
+  // or corruption since the last poll. Never apply a stale pending candidate.
+  const bool changed = handle(CheckContent{});
+  if (pending_) {
+    fixture_ = std::move(*pending_);
+    pending_.reset();
+    content_update_ = ContentUpdate::none;
+    index_ = 0;
+    // Loading new content is not a rendered-frame acknowledgement.
+    state_ = State::booting;
+    return true;
+  }
+  if (index_ == 0) return changed;
   index_ = 0;
   return true;
 }

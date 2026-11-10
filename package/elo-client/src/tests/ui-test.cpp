@@ -3,6 +3,7 @@
 #include "QtAdapters.hpp"
 #include <QCryptographicHash>
 #include <QFile>
+#include <QSaveFile>
 #include <QDir>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -95,6 +96,78 @@ class UiTest : public QObject {
     QTRY_COMPARE(model.state(), "READY_LOCAL");
     QVERIFY(!model.canRetry());
   }
+  void liveContentWaitsForSessionBoundary() {
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    QtLocalStore store(directory.path());
+    JsonCatalog catalog(store);
+    auto publish = [&directory](const QString& title) {
+      const auto payload = QJsonDocument(QJsonObject{
+        {"schema", 1}, {"id", "live-elo"}, {"name", "Publicação ELO"}, {"version", "1"},
+        {"pages", QJsonArray{QJsonObject{{"title", title}, {"body", "Publicação local."}},
+                            QJsonObject{{"title", "Segunda página"}, {"body", "Sessão em andamento."}}}}
+      }).toJson();
+      const auto digest = QString::fromLatin1(QCryptographicHash::hash(payload, QCryptographicHash::Sha256).toHex());
+      const auto bundle = directory.path() + "/bundles/" + digest;
+      if (!QDir().mkpath(bundle)) return false;
+      auto write = [](const QString& path, const QByteArray& bytes) {
+        QSaveFile file(path);
+        return file.open(QIODevice::WriteOnly) && file.write(bytes) == bytes.size() && file.commit();
+      };
+      return write(bundle + "/presentation.json", payload)
+          && write(bundle + "/manifest.json", QJsonDocument(QJsonObject{
+            {"schema", 1}, {"file", "presentation.json"}, {"size", static_cast<int>(payload.size())}, {"sha256", digest}
+          }).toJson())
+          && write(directory.path() + "/active.json", QJsonDocument(QJsonObject{{"bundle", digest}}).toJson());
+    };
+    QVERIFY(publish("Primeira publicação"));
+    struct Network : elo::NetworkStatus {
+      bool available() const override { return false; }
+    } network;
+    BootClock clock;
+    ClientModel model(nullptr, &catalog);
+    QQmlApplicationEngine engine;
+    engine.rootContext()->setContextProperty("clientModel", &model);
+    engine.load(QUrl("qrc:/Main.qml"));
+    QVERIFY(!engine.rootObjects().isEmpty());
+    auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+    QVERIFY(window);
+    QtRuntime runtime(*window, model, clock, network, directory.path() + "/health", "live-content-test");
+    runtime.start();
+    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QTRY_COMPARE(model.state(), "READY_LOCAL");
+    model.next();
+    const auto old_digest = model.presentationDigest();
+    const auto old_title = model.title();
+    QVERIFY(publish("Novo conteúdo ELO"));
+    // Exercise the actual runtime timer, not a direct call to the model seam.
+    QTRY_VERIFY_WITH_TIMEOUT(!model.contentUpdate().isEmpty(), 5000);
+    QCOMPARE(model.presentationDigest(), old_digest);
+    QCOMPARE(model.title(), old_title);
+    QCOMPARE(model.pageNumber(), 2);
+    auto* reset = window->findChild<QQuickItem*>("resetButton");
+    QVERIFY(reset);
+    QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier,
+                      reset->mapToScene(QPointF(reset->width() / 2, reset->height() / 2)).toPoint());
+    QTRY_COMPARE(model.title(), "Novo conteúdo ELO");
+    QTRY_COMPARE(model.state(), "READY_LOCAL");
+    QCOMPARE(model.pageNumber(), 1);
+    QVERIFY(model.contentUpdate().isEmpty());
+    QVERIFY(model.presentationDigest() != old_digest);
+    auto* title = window->findChild<QObject*>("pageTitle");
+    QVERIFY(title);
+    QTRY_COMPARE(title->property("text").toString(), "Novo conteúdo ELO");
+    const auto new_digest = model.presentationDigest();
+    QFile pointer(directory.path() + "/active.json");
+    QVERIFY(pointer.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    QCOMPARE(pointer.write("invalid"), qint64(7));
+    pointer.close();
+    QTRY_VERIFY_WITH_TIMEOUT(model.contentUpdate().contains("preservado"), 5000);
+    model.reset();
+    QCOMPARE(model.presentationDigest(), new_digest);
+    QCOMPARE(model.state(), "READY_LOCAL");
+    QVERIFY(model.error().isEmpty());
+  }
   void externalContentRequiresVerifiedBytes() {
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
@@ -124,6 +197,12 @@ class UiTest : public QObject {
     QCOMPARE(model.state(), "READY_LOCAL");
     QCOMPARE(model.title(), "Local");
     QVERIFY(write(bundle + "/presentation.json", payload.left(payload.size() - 1)));
+    model.checkContent();
+    QVERIFY(model.contentUpdate().contains("preservado"));
+    QCOMPARE(model.title(), "Local");
+    model.reset();
+    QCOMPARE(model.state(), "READY_LOCAL");
+    QCOMPARE(model.title(), "Local");
     ClientModel corrupted(nullptr, &catalog);
     corrupted.start();
     corrupted.presentationReady();
@@ -147,7 +226,7 @@ class UiTest : public QObject {
     model.start();
     QTRY_COMPARE(model.state(), "READY_LOCAL");
     QVERIFY(changes.size() >= 2);
-    QVERIFY(model.fixtureLabel().contains("fixture v1"));
+    QVERIFY(model.fixtureLabel().contains("formato local v1"));
     auto* title = window->findChild<QObject*>("pageTitle");
     auto* counter = window->findChild<QObject*>("pageCounter");
     QVERIFY(title && counter);
@@ -191,7 +270,7 @@ class UiTest : public QObject {
     bool painted = false;
     for (int y = 0; y < frame.height(); y += 8)
       for (int x = 0; x < frame.width(); x += 8)
-        painted |= frame.pixelColor(x, y) != QColor("#101d23");
+        painted |= frame.pixelColor(x, y) != window->color();
     QVERIFY(painted);
     const auto screenshot = qEnvironmentVariable("ELO_SCREENSHOT");
     if (!screenshot.isEmpty()) QVERIFY(frame.save(screenshot));

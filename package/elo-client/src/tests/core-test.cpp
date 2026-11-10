@@ -73,6 +73,53 @@ int main() {
   failed_presentation.start();
   check(failed_presentation.dispatch(elo::PresentationReady{false}) && !failed_presentation.usable(), "render failure never READY");
   check(!failed_presentation.dispatch(elo::PresentationReady{true}), "late frame cannot hide failure");
+  Catalog updates;
+  elo::Client live(&updates);
+  live.start();
+  check(!live.dispatch(elo::CheckContent{}), "no update before first frame");
+  live.dispatch(elo::PresentationReady{true});
+  live.next();
+  const auto original = live.fixture();
+  const auto current_page = live.page();
+  check(!live.dispatch(elo::CheckContent{}) && live.index() == 1, "unchanged catalog preserves session");
+  updates.result.fixture.pages[0].body = "New editorial content";
+  check(live.dispatch(elo::CheckContent{}) && live.content_update() == elo::ContentUpdate::available,
+        "valid candidate announced");
+  check(live.fixture() == original && live.page() == current_page && live.usable(),
+        "update never interrupts current presentation");
+  check(!live.dispatch(elo::CheckContent{}), "duplicate update poll is quiet");
+  // A once-valid pending candidate must not survive a later rejected pointer.
+  updates.result.status = elo::LoadStatus::invalid;
+  check(live.reset() && live.fixture() == original && live.index() == 0 && live.usable(),
+        "boundary revalidation rejects stale pending update");
+  check(live.content_update() == elo::ContentUpdate::rejected && live.error().empty(),
+        "update rejection is separate from presentation failure");
+  check(!live.dispatch(elo::CheckContent{}), "repeated rejection is quiet");
+  for (auto status : {elo::LoadStatus::missing, elo::LoadStatus::timeout, elo::LoadStatus::fatal}) {
+    updates.result.status = status;
+    live.dispatch(elo::CheckContent{});
+    live.reset();
+    check(live.fixture() == original && live.usable(), "failed update preserves usable in-memory content");
+  }
+  updates.result.status = elo::LoadStatus::loaded;
+  updates.result.fixture.pages[0].body.clear();
+  live.reset();
+  check(live.fixture() == original && live.usable(), "structurally invalid update cannot replace active");
+  updates.result.fixture = original;
+  check(live.dispatch(elo::CheckContent{}) && live.content_update() == elo::ContentUpdate::none,
+        "restored original clears warning without resetting navigation");
+  updates.result.fixture.pages[0].body = "Second publication";
+  live.dispatch(elo::CheckContent{});
+  // A newer pointer supersedes the candidate seen by the timer.
+  updates.result.fixture.pages[0].body = "Latest publication";
+  check(live.reset() && live.page().body == "Latest publication" && live.index() == 0,
+        "reset applies freshly revalidated publication");
+  check(live.state() == elo::State::booting && !live.next(), "updated content awaits a presentation frame");
+  live.dispatch(elo::PresentationReady{true});
+  check(live.usable() && live.content_update() == elo::ContentUpdate::none, "new presentation acknowledged");
+  updates.result.fixture = original;
+  check(live.reset() && live.fixture() == original, "explicit reactivation of prior publication supported");
+  live.dispatch(elo::PresentationReady{true});
   struct FakeClock : elo::Clock {
     std::uint64_t tick = 0;
     std::uint64_t now_ms() const override { return tick; }

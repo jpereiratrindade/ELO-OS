@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 import QtQuick
+import "MorfoTheme.js" as Theme
 
 Window {
     id: window
@@ -8,20 +9,23 @@ Window {
     height: 640
     minimumWidth: 640
     minimumHeight: 480
-    color: "#101d23"
-    title: "ELO — apresentação local"
+    color: Theme.background
+    readonly property string uiFont: Qt.fontFamilies().indexOf("Plus Jakarta Sans") >= 0
+                                     ? "Plus Jakarta Sans" : "DejaVu Sans"
+    title: "ELO — experiências"
 
     component LocalButton: Rectangle {
         property string label
+        property bool primary: false
         signal activated()
         width: 150
         height: 48
         radius: 8
-        color: !enabled ? "#26363c" : activeFocus ? "#e9f6f1" : "#bdddd1"
-        border.width: activeFocus ? 3 : 0
-        border.color: "#52bfa1"
+        color: primary ? Theme.blue : Theme.surface
+        border.width: activeFocus ? 3 : 1
+        border.color: activeFocus ? Theme.focus : primary ? Theme.blue : Theme.line
         activeFocusOnTab: enabled
-        opacity: enabled ? 1 : 0.5
+        opacity: enabled ? 1 : 0.45
         Accessible.role: Accessible.Button
         Accessible.name: label
         Accessible.onPressAction: if (enabled) activated()
@@ -30,7 +34,8 @@ Window {
         Text {
             anchors.centerIn: parent
             text: parent.label
-            color: parent.enabled ? "#142d27" : "#c0d0d2"
+            color: parent.primary ? Theme.surface : Theme.navy
+            font.family: window.uiFont
             font.pixelSize: 17
         }
         MouseArea {
@@ -56,10 +61,18 @@ Window {
         Row {
             id: header
             spacing: 16
-            Text { text: "ELO"; color: "#f1f6f3"; font.pixelSize: 27; font.bold: true }
-            Text { text: "ELO/OS · bancada local"; color: "#a4c8bd"; font.pixelSize: 17; anchors.verticalCenter: parent.verticalCenter }
+            Text { text: "ELO"; font.family: window.uiFont; color: Theme.navy; font.pixelSize: 27; font.bold: true }
+            Text { text: "ELO/OS · experiências"; font.family: window.uiFont; color: Theme.muted; font.pixelSize: 17; anchors.verticalCenter: parent.verticalCenter }
+        }
+        Rectangle {
+            anchors.fill: contentColumn
+            anchors.margins: -24
+            color: Theme.surface
+            radius: 13
+            border.color: Theme.line
         }
         Column {
+            id: contentColumn
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
@@ -67,7 +80,8 @@ Window {
             Text {
                 objectName: "pageCounter"
                 text: clientModel.pageCount > 0 ? clientModel.pageNumber + " / " + clientModel.pageCount : "Sem conteúdo local"
-                color: "#79c9ae"
+                color: Theme.teal
+                font.family: window.uiFont
                 font.pixelSize: 18
             }
             Text {
@@ -76,7 +90,8 @@ Window {
                 text: clientModel.title
                 width: parent.width
                 wrapMode: Text.WordWrap
-                color: "#f1f6f3"
+                color: Theme.navy
+                font.family: window.uiFont
                 font.pixelSize: window.width < 800 ? 30 : 42
                 font.bold: true
             }
@@ -86,7 +101,8 @@ Window {
                 text: clientModel.body
                 width: parent.width
                 wrapMode: Text.WordWrap
-                color: "#c0d0d2"
+                color: Theme.ink
+                font.family: window.uiFont
                 font.pixelSize: window.width < 800 ? 19 : 23
                 lineHeight: 1.3
             }
@@ -103,15 +119,18 @@ Window {
                 enabled: clientModel.canRetry || (clientModel.pageCount > 0 && clientModel.error.length === 0)
                 onActivated: clientModel.canRetry ? clientModel.retry() : clientModel.reset()
             }
-            LocalButton { objectName: "nextButton"; label: "Continuar"; enabled: clientModel.canNext; onActivated: clientModel.next() }
+            LocalButton { objectName: "nextButton"; primary: true; label: "Continuar"; enabled: clientModel.canNext; onActivated: clientModel.next() }
         }
         Text {
             id: footer
+            anchors.right: parent.right
+            wrapMode: Text.WordWrap
             textFormat: Text.PlainText
             anchors.left: parent.left
             anchors.bottom: parent.bottom
-            text: clientModel.state + " · " + clientModel.fixtureLabel + "\n" + clientModel.connectivity + "\nNo seu tempo. Sem conexão necessária."
-            color: "#8da7ad"
+            text: clientModel.state + " · " + clientModel.fixtureLabel + "\n" + clientModel.connectivity + (clientModel.contentUpdate.length > 0 ? "\n" + clientModel.contentUpdate : "") + "\nNo seu tempo. Sem conexão necessária."
+            color: Theme.muted
+            font.family: window.uiFont
             font.pixelSize: 15
         }
     }

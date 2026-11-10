@@ -88,3 +88,12 @@ PROFILE="$GUI_PROFILE" python3 tests/client/qemu-gui-smoke.py
 `elo-client-rebuild` sincroniza novamente o `SITE_METHOD=local`, recompila/reinstala a aplicação e reutiliza dependências Qt já concluídas. O segundo comando é necessário para gerar um novo `rootfs.ext4`; reconstruir apenas o pacote não atualiza a imagem. Para mudanças nas opções CMake, use `elo-client-reconfigure` no lugar de `elo-client-rebuild`. Alterações de toolchain, configuração Qt ou dependências exigem revisar o procedimento de rebuild do Buildroot separadamente.
 
 Não executar esses comandos enquanto houver outro make no mesmo `O=`. Não apontar o diretório de saída para os perfis de console/Pi 5 históricos. Cada imagem nova tem outro hash e precisa de seu próprio ensaio; o relatório anterior não a valida automaticamente.
+
+## Ponte editorial ELO
+
+Importação de variantes textuais publicadas: [contrato e execução](../../docs/client/elo-content-import.md). Teste: `python3 tests/client/elo-import-test.py`.
+
+Recarga local: testes do núcleo verificam revalidação ao Recomeçar, candidato
+revogado, falhas, duplicatas e retorno a publicação anterior. Teste Qt
+`liveContentWaitsForSessionBoundary` publica em armazenamento real, verifica detecção
+pelo timer, troca pelo botão da interface e preservação após corrupção do apontador.

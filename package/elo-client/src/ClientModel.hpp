@@ -17,6 +17,7 @@ class ClientModel : public QObject {
   Q_PROPERTY(bool canNext READ canNext NOTIFY changed)
   Q_PROPERTY(bool canPrevious READ canPrevious NOTIFY changed)
   Q_PROPERTY(bool canRetry READ canRetry NOTIFY changed)
+  Q_PROPERTY(QString contentUpdate READ contentUpdate NOTIFY changed)
   Q_PROPERTY(QString connectivity READ connectivity NOTIFY changed)
  public:
   explicit ClientModel(QObject* parent = nullptr, elo::ContentCatalog* catalog = nullptr,
@@ -33,7 +34,12 @@ class ClientModel : public QObject {
   bool canPrevious() const { return client_.can_previous(); }
   bool canRetry() const { return client_.state() == elo::State::error_recoverable; }
   QString connectivity() const;
+  void setServerStatus(QString status);
+  QString contentUpdate() const;
+  void checkContent();
   QByteArray presentationDigest() const;
+  QByteArray contentDigest() const;
+  void confirmPresented(const QByteArray& digest);
   void setNetworkAvailable(bool available);
   void start();
   void presentationReady();
@@ -43,7 +49,9 @@ class ClientModel : public QObject {
   Q_INVOKABLE void retry();
  signals:
   void changed();
+  void contentPresented(QByteArray digest);
  private:
   elo::Client client_;
   bool network_available_ = false;
+  QString server_status_;
 };

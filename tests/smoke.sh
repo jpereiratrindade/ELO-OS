@@ -66,7 +66,10 @@ print('PASS Q0-static: estrutura, sintaxe shell/Python e integração externa; N
 PY
 PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/tests/boot/pi5-preflight-test.py"
 PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/tests/client/local-content-test.py"
+PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/tests/client/elo-import-test.py"
 PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/tests/client/supervisor-test.py"
 PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/tests/recovery/data-image-test.py"
 
 PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/tests/network/pi5-tools-test.py"
+
+PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/tests/network/panel-test.py"

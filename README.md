@@ -55,7 +55,7 @@ incorporadas nem validação física deste novo perfil. O perfil `pi5` fica pres
 
 **Validação no desktop em 2026-11-09:** cliente C++23/Qt, adaptadores, ledger e supervisor passaram nos ensaios nativos, incluindo sessão gráfica Fedora. Imagens x86_64/KVM e ARM64/TCG passaram sem NIC e com perda/reconexão, incluindo SIGKILL/SIGSTOP e frames inspecionados. Núcleo ARM64 passou em C++23 e no subconjunto experimental C++26. Builds executados em Toolbox Fedora 44 com 32 jobs. Consulte as evidências [x86_64](docs/evidence/P2-DESKTOP-X86-20261109.md), [ARM64](docs/evidence/P2-DESKTOP-AARCH64-20261109.md) e o [roteiro de compilação e testes](docs/tests/desktop-validation.md). Os PASS históricos preservam seu escopo.
 
-O núcleo C++ começa sem rede e oferece três páginas locais com navegação e reinício. O frontend Qt Quick observa os estados e encaminha teclado/botões. É uma apresentação básica de disponibilidade; ainda não implementa protocolo ELO, conteúdo do servidor, cache, identidade pessoal ou sincronização.
+O núcleo C++ começa sem rede e oferece três páginas locais com navegação e reinício. O frontend Qt Quick observa os estados e encaminha teclado/botões. É uma apresentação básica de disponibilidade; ainda não implementa protocolo de distribuição ELO, download do servidor, identidade pessoal ou sincronização. A ponte editorial abaixo permite consumir variantes textuais publicadas.
 
 No Fedora com dependências Qt de desenvolvimento disponíveis:
 
@@ -67,6 +67,28 @@ No Fedora com dependências Qt de desenvolvimento disponíveis:
 Build nativo em `build/client-fedora/`, separado do Buildroot. O padrão é C++23 portátil; C++26 é um perfil experimental explícito, avaliado pelo código e testes reais. Consulte o [contrato e comandos de teste do cliente](tests/client/README.md) e a [decisão arquitetural](docs/adr/ADR-009-local-client.md).
 
 Para a bancada gráfica, use `PROFILE=qemu-x86_64-gui` ou `PROFILE=qemu-aarch64-gui` com `scripts/build.sh` e `scripts/run-qemu.sh`. Cada perfil tem saída própria em `output/`, Qt Quick por software, LinuxFB/DRM, VirtIO GPU e apresentação em tela cheia. O teste `tests/client/qemu-gui-smoke.py` cobre partida sem NIC, framebuffer/teclado e recuperação de processo; o cenário `QEMU_GUI_NETWORK=user` verifica perda/reconexão do link. Ambos passaram nas duas arquiteturas. No desktop Toolbox, exporte primeiro o perfil escolhido em `PROFILE` e informe também `OUTPUT_DIR="$PWD/output/toolbox/$PROFILE"`. Essa pilha não comprova EGLFS/V3D na Pi 5; não habilite o cliente no perfil físico antes de configurar e validar sua pilha gráfica.
+
+### Servidor e thin client conectado
+
+Serviço de distribuição HTTPS lê publicações ELO, autentica credencial do terminal
+e entrega conteúdo textual para cache local. Neste Fedora, daemon `elo-content.service`
+está instalado em localhost; abra cliente conectado com `./scripts/run-thin-client.sh`.
+[Instalação, contrato, operação e limites](docs/client/distribution.md).
+Painel web disponível em `https://localhost:8443/`, com acesso ao Estúdio editorial
+e seleção do conteúdo entregue. Confirmações do cliente distinguem recebimento
+e apresentação, com horário da última comunicação. [Acesso e fluxo editorial](docs/client/server-panel.md).
+Cliente e painel seguem identidade visual do MORFO. Integração foi testada no host;
+a imagem Pi 5 ainda precisa ser recompilada e validada para essa capacidade.
+
+### Primeiro consumo de conteúdo editorial ELO
+
+Cliente aceita agora projeção explícita de variantes textuais de bundles ELO
+publicados (schemas 0.1/0.2), com hash nativo conferido e ativação local atômica.
+Com a janela aberta, novas ativações são anunciadas e aplicadas ao Recomeçar,
+preservando a sessão em andamento e recusando atualizações inválidas.
+O [roteiro de importação](docs/client/elo-content-import.md) contém comandos,
+capacidades e limites. É uma ponte offline operada no host. A distribuição textual HTTPS acima usa essa
+projeção; identidade completa, eventos duráveis e experiências completas continuam pendentes.
 
 ### Construção integral: appliance virtual
 

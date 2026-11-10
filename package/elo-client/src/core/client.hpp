@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <variant>
@@ -11,12 +12,18 @@ class Diagnostics;
 enum class State { booting, ready_local, connecting, online, degraded_offline,
                    update_staged, validating, error_recoverable, restarting, error_fatal };
 std::string_view state_name(State state);
-struct Page { std::string title; std::string body; };
+struct Page {
+  std::string title;
+  std::string body;
+  bool operator==(const Page&) const = default;
+};
 struct Fixture {
   std::string id;
   std::string name;
   std::string version;
   std::vector<Page> pages;
+  std::string content_hash;  // Exact validated local payload bytes; empty for built-in content.
+  bool operator==(const Fixture&) const = default;
 };
 enum class LoadStatus { loaded, missing, invalid, timeout, fatal };
 struct LoadResult { LoadStatus status; Fixture fixture; };
@@ -29,10 +36,12 @@ struct Start {};
 struct Next {};
 struct Previous {};
 struct Reset {};
+struct CheckContent {};
+enum class ContentUpdate { none, available, rejected };
 struct PresentationReady { bool success; };
 struct NetworkChanged { bool available; };
 struct Retry {};
-using Event = std::variant<Start, Next, Previous, Reset, PresentationReady, NetworkChanged, Retry>;
+using Event = std::variant<Start, Next, Previous, Reset, PresentationReady, NetworkChanged, Retry, CheckContent>;
 // The core performs no I/O. A loaded fixture and an actual presentation acknowledgement
 // are both required for READY_LOCAL. Link availability never establishes ONLINE.
 class Client {
@@ -49,6 +58,7 @@ class Client {
   std::string_view error() const { return error_; }
   Page page() const;
   const Fixture& fixture() const { return fixture_; }
+  ContentUpdate content_update() const { return content_update_; }
   std::size_t index() const { return index_; }
   std::size_t page_count() const { return fixture_.pages.size(); }
   bool usable() const { return state_ == State::ready_local || state_ == State::degraded_offline; }
@@ -59,6 +69,7 @@ class Client {
   bool handle(Next);
   bool handle(Previous);
   bool handle(Reset);
+  bool handle(CheckContent);
   bool handle(PresentationReady event);
   bool handle(NetworkChanged event);
   bool handle(Retry);
@@ -68,6 +79,8 @@ class Client {
   Fixture fixture_;
   std::string error_;
   std::size_t index_ = 0;
+  std::optional<Fixture> pending_;
+  ContentUpdate content_update_ = ContentUpdate::none;
   bool loaded_ = false;
   bool network_available_ = false;
 };
