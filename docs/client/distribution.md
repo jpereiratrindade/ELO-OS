@@ -125,7 +125,7 @@ ou proteção contra reativação de uma publicação antiga por servidor autori
 
 Requisições só começam após primeiro frame. Download é assíncrono, sem esperar rede
 para apresentar cache. Timeout de inatividade: 10 s; prazo total: 15 s; resposta até
-2 MiB e apresentação até 256 KiB. Sem redirects e sem proxy automático. Consulta a
+16 MiB e apresentação até 8 MiB. Sem redirects e sem proxy automático. Consulta a
 cada 30 s; falhas repetem em 5/10/20/40/60 s, sem requisições concorrentes. O serviço
 não mantém credencial em logs. Arquivo de token é relido em cada tentativa; falta ou
 permissão inválida bloqueia download sem impedir uso do cache.
@@ -172,3 +172,5 @@ Contrato Qt consultado: [QNetworkRequest 6.5](https://doc.qt.io/qt-6.5/qnetworkr
 [Evidência da implantação e testes](../evidence/D1-DISTRIBUTION-20261110.md).
 
 Continuidade: [painel web e Estúdio editorial integrados](server-panel.md).
+
+Evolução do cliente: [texto e imagem com cache offline](image-content.md).

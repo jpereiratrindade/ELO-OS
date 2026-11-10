@@ -10,6 +10,8 @@ QString text(std::string_view value) {
 QString ClientModel::state() const { return text(client_.state_name()); }
 QString ClientModel::title() const { return text(client_.page().title); }
 QString ClientModel::body() const { return text(client_.page().body); }
+QString ClientModel::imageSource() const { return text(client_.page().image_source); }
+QString ClientModel::imageAlt() const { return text(client_.page().image_alt); }
 QString ClientModel::fixtureLabel() const {
   if (client_.fixture().id.empty()) return "Conteúdo não carregado";
   return text(client_.fixture().name) + " · formato local v" + text(client_.fixture().version);
@@ -52,7 +54,8 @@ void ClientModel::retry() {
 QByteArray ClientModel::presentationDigest() const {
   QByteArray bytes;
   for (const auto& part : {client_.fixture().id, client_.fixture().version,
-                           client_.page().title, client_.page().body}) {
+                           client_.page().title, client_.page().body, client_.page().image_hash}) {
+    if (part.empty()) continue;
     bytes.append(part.data(), static_cast<qsizetype>(part.size()));
     bytes.append('\0');
   }

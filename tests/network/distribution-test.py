@@ -2,7 +2,11 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Native Qt client + actual distribution service, with isolated test credentials."""
 import fcntl
+import base64
 import hashlib
+import http.client
+import struct
+import zlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
@@ -196,6 +200,53 @@ class DistributionTest(unittest.TestCase):
         self.wait(lambda: receipt.record and receipt.record['received_sha256'] == digest)
         self.assertEqual(receipt.record['presented_sha256'], previous)
         self.assertEqual(receipt.status(digest)['state'], 'received')
+
+    def test_image_download_requires_capability_and_survives_offline_restart(self):
+        def chunk(kind, data):
+            return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind + data))
+        raw = (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', 1, 1, 8, 2, 0, 0, 0))
+               + chunk(b'IDAT', zlib.compress(b'\x00\xea\x27\x39')) + chunk(b'IEND', b''))
+        path = self.bundle / 'assets/test.png'; path.parent.mkdir(parents=True); path.write_bytes(raw)
+        path = self.bundle / 'catalog/variants/text.json'
+        variant = json.loads(path.read_text()); variant['presentation']['media'] = ['assets/test.png']
+        path.write_bytes(content.encoded(variant))
+        digest = hashlib.sha256()
+        for path in sorted(self.bundle.rglob('*')):
+            if path.is_file() and path.name != 'manifest.json':
+                digest.update(path.relative_to(self.bundle).as_posix().encode()); digest.update(path.read_bytes())
+        path = self.bundle / 'manifest.json'; manifest = json.loads(path.read_text())
+        manifest['content_hash'] = 'sha256:' + digest.hexdigest(); path.write_bytes(content.encoded(manifest))
+        port = self.actual_server(tls=True)
+        connection = http.client.HTTPSConnection('localhost', port, context=ssl.create_default_context(cafile=str(self.cert)))
+        connection.request('GET', '/v1/presentation', headers={'Authorization': 'Bearer ' + self.token.decode()})
+        response = connection.getresponse(); self.assertEqual(response.status, 409); response.read(); connection.close()
+        child, health, log = self.launch(port, tls=True)
+        receipt = self.services[-1].receipts
+        self.wait(lambda: receipt.record and receipt.record['presented_sha256'])
+        active = content.read_active(self.cache)
+        self.assertEqual(active['version'], '2')
+        self.assertEqual(active['pages'][0]['image']['sha256'], hashlib.sha256(raw).hexdigest())
+        previous_frame = self.frame(health)[7]
+        child.terminate(); child.wait(timeout=5)
+        service = self.services.pop(); service.shutdown(); service.server_close()
+        child, health, log = self.launch(port, tls=True)
+        self.wait(lambda: len(self.frame(health)) == 8 and self.frame(health)[7] == previous_frame)
+        self.assertIn(self.frame(health)[5], ('READY_LOCAL', 'DEGRADED_OFFLINE'))
+
+    def test_invalid_image_bytes_preserve_previous_cache(self):
+        previous = self.seeded_cache()
+        raw = b'\x89PNG\r\n\x1a\ninvalid'
+        document = {'schema': 1, 'id': 'bad-image', 'name': 'Imagem inválida', 'version': '2',
+                    'pages': [{'title': 'Teste', 'body': 'Não substituir cache.', 'image': {
+                        'mime': 'image/png', 'base64': base64.b64encode(raw).decode(),
+                        'sha256': hashlib.sha256(raw).hexdigest(), 'alt': 'Teste'}}]}
+        payload = content.encoded(document)
+        value = json.loads(elo_server.envelope(self.bundle, ['text']))
+        value.update(presentation=payload.decode(), size=len(payload), sha256=hashlib.sha256(payload).hexdigest())
+        port = self.raw_server(content.encoded(value))
+        child, health, log = self.launch(port)
+        self.wait(lambda: 'Servidor indisponível' in log.read_text())
+        self.assertEqual((self.cache / 'active.json').read_bytes(), previous)
 
     def test_https_with_explicit_trust(self):
         port = self.actual_server(tls=True)

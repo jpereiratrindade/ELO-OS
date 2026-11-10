@@ -87,3 +87,5 @@ cobertas por `tests/client/local-content-test.py`.
 Ensaio com bundle publicado real: [evidência de 2026-11-10](../evidence/I3-ELO-TEXT-20261110.md).
 
 Continuidade implementada: [distribuição HTTPS e daemon local](distribution.md). O importador permanece ferramenta offline independente.
+
+Contrato ampliado: [uma imagem PNG/JPEG por página, formato local v2](image-content.md). Descrições text-only acima registram marco inicial; limites atuais estão no novo contrato.

@@ -54,6 +54,7 @@ class QtRuntime final : public QObject {
   const elo::NetworkStatus& network_;
   FrameTracker presentation_;
   QTimer timer_;
+  bool rendering_media_ready_ = true;
   QByteArray rendering_page_;
   QByteArray rendering_content_;
   QString health_file_;

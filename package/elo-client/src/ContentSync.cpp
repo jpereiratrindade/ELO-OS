@@ -23,7 +23,7 @@
 #include <unistd.h>
 
 namespace {
-constexpr qsizetype limit = 2 * 1024 * 1024;
+constexpr qsizetype limit = 16 * 1024 * 1024;
 struct Descriptor {
   int fd;
   ~Descriptor() { if (fd >= 0) ::close(fd); }
@@ -80,7 +80,7 @@ int publish(const QString& root, const QByteArray& bytes, const QByteArray& dige
     QFile content(target + "/presentation.json");
     QFile metadata(target + "/manifest.json");
     if (QFileInfo(content).isSymLink() || QFileInfo(metadata).isSymLink()
-        || !content.open(QIODevice::ReadOnly) || content.read(256 * 1024 + 1) != bytes
+        || !content.open(QIODevice::ReadOnly) || content.read(8 * 1024 * 1024 + 1) != bytes
         || !metadata.open(QIODevice::ReadOnly)) return 0;
     const auto obj = QJsonDocument::fromJson(metadata.read(4097)).object();
     if (obj.size() != 4 || obj["schema"].toDouble(-1) != 1 || obj["file"] != "presentation.json"
@@ -158,6 +158,7 @@ void ContentSync::fetch() {
   QNetworkRequest request(endpoint_);
   request.setRawHeader("Authorization", "Bearer " + token);
   request.setRawHeader("Accept", "application/json");
+  request.setRawHeader("X-ELO-Capabilities", "text-v1,image-v2");
   request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
   request.setAttribute(QNetworkRequest::CacheLoadControlAttribute, QNetworkRequest::AlwaysNetwork);
   request.setSslConfiguration(tls_);
@@ -191,7 +192,7 @@ void ContentSync::finish() {
   const auto payload = object["presentation"].toString().toUtf8();
   const auto digest = QCryptographicHash::hash(payload, QCryptographicHash::Sha256).toHex();
   if (object.size() != 5 || object["schema"].toDouble(-1) != 1 || !object["source"].isObject()
-      || payload.isEmpty() || payload.size() > 256 * 1024 || object["size"].toDouble(-1) != payload.size()
+      || payload.isEmpty() || payload.size() > 8 * 1024 * 1024 || object["size"].toDouble(-1) != payload.size()
       || object["sha256"].toString().toLatin1() != digest) { fail(); return; }
   const auto result = publish(root_, payload, digest);
   if (!result) { fail(); return; }

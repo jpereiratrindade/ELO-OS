@@ -11,6 +11,7 @@
 #include <QTemporaryDir>
 #include <QCoreApplication>
 #include <QImage>
+#include <QBuffer>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickWindow>
@@ -209,6 +210,79 @@ class UiTest : public QObject {
     QCOMPARE(corrupted.state(), "ERROR_RECOVERABLE");
     QVERIFY(write(directory.path() + "/active.json", "{\"bundle\":\"../escape\"}"));
     QCOMPARE(store.read_active().status, elo::LoadStatus::invalid);
+  }
+  void imagePresentationRequiresValidatedPixels() {
+    struct MemoryStore : elo::LocalStore {
+      QByteArray bytes;
+      elo::StoredContent read_active() const override { return {elo::LoadStatus::loaded, bytes.toStdString()}; }
+    } store;
+    auto imageDocument = [](int width) {
+      QImage image(width, 16, QImage::Format_RGB32);
+      image.fill(QColor("#ea2739"));
+      QByteArray raw;
+      QBuffer buffer(&raw);
+      buffer.open(QIODevice::WriteOnly);
+      image.save(&buffer, "PNG");
+      return QJsonObject{{"mime", "image/png"}, {"base64", QString::fromLatin1(raw.toBase64())},
+          {"sha256", QString::fromLatin1(QCryptographicHash::hash(raw, QCryptographicHash::Sha256).toHex())},
+          {"alt", "Imagem de teste vermelha"}};
+    };
+    QJsonObject page{{"title", "Imagem local"}, {"body", "Disponível sem rede."}, {"image", imageDocument(16)}};
+    QJsonObject document{{"schema", 1}, {"id", "image-test"}, {"name", "Imagem"}, {"version", "2"},
+                         {"pages", QJsonArray{page}}};
+    store.bytes = QJsonDocument(document).toJson();
+    JsonCatalog catalog(store);
+    QCOMPARE(catalog.load().status, elo::LoadStatus::loaded);
+    ClientModel model(nullptr, &catalog);
+    QSignalSpy receipts(&model, &ClientModel::contentPresented);
+    QQmlApplicationEngine engine;
+    engine.rootContext()->setContextProperty("clientModel", &model);
+    engine.load(QUrl("qrc:/Main.qml"));
+    QVERIFY(!engine.rootObjects().isEmpty());
+    auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+    QVERIFY(window);
+    struct Network : elo::NetworkStatus { bool available() const override { return false; } } network;
+    BootClock clock;
+    QtRuntime runtime(*window, model, clock, network);
+    runtime.start();
+    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QTRY_COMPARE(model.state(), "READY_LOCAL");
+    auto* item = window->findChild<QQuickItem*>("pageImage");
+    QVERIFY(item && item->isVisible());
+    QCOMPARE(item->property("status").toInt(), 1);
+    QCOMPARE(model.imageAlt(), "Imagem de teste vermelha");
+    QTRY_VERIFY(!receipts.empty());
+    QCOMPARE(receipts.last()[0].toByteArray(), model.contentDigest());
+    const auto pixel = item->mapToScene(QPointF(item->width()/2, item->height()/2)).toPoint();
+    const auto frame = window->grabWindow();
+    QVERIFY(!frame.isNull());
+    QVERIFY(frame.pixelColor(pixel).red() > 200 && frame.pixelColor(pixel).green() < 80);
+    const auto realRoot = qEnvironmentVariable("ELO_IMAGE_CONTENT_DIR");
+    if (!realRoot.isEmpty()) {
+      QtLocalStore realStore(realRoot);
+      const auto stored = realStore.read_active();
+      QCOMPARE(stored.status, elo::LoadStatus::loaded);
+      store.bytes = QByteArray::fromStdString(stored.utf8);
+      model.checkContent(); model.reset();
+      QTRY_COMPARE(model.state(), "READY_LOCAL");
+      QTRY_COMPARE(item->property("status").toInt(), 1);
+      QTest::qWait(100);
+      const auto target = qEnvironmentVariable("ELO_IMAGE_SCREENSHOT");
+      if (!target.isEmpty()) QVERIFY(window->grabWindow().save(target));
+    }
+    const auto digest = model.contentDigest();
+    page["image"] = imageDocument(4097);
+    document["pages"] = QJsonArray{page};
+    store.bytes = QJsonDocument(document).toJson();
+    QCOMPARE(catalog.load().status, elo::LoadStatus::invalid);
+    model.checkContent(); model.reset();
+    QCOMPARE(model.contentDigest(), digest);
+    QVERIFY(model.contentUpdate().contains("preservado"));
+    page["image"] = imageDocument(16);
+    auto corrupted = page["image"].toObject(); corrupted["sha256"] = QString(64, QLatin1Char('0'));
+    page["image"] = corrupted; document["pages"] = QJsonArray{page};
+    store.bytes = QJsonDocument(document).toJson();
+    QCOMPARE(catalog.load().status, elo::LoadStatus::invalid);
   }
   void localPresentation() {
     ClientModel model;

@@ -13,13 +13,16 @@ Fixture local_fixture() {
 }
 namespace {
 bool valid(const Fixture& fixture) {
-  if (fixture.id.empty() || fixture.name.empty() || fixture.version != "1" ||
+  if (fixture.id.empty() || fixture.name.empty() || (fixture.version != "1" && fixture.version != "2") ||
       fixture.pages.empty() || fixture.pages.size() > 32 || fixture.id.size() > 128 || fixture.name.size() > 256)
     return false;
   if (fixture.id.find('\0') != std::string::npos || fixture.name.find('\0') != std::string::npos) return false;
   for (const auto& page : fixture.pages) {
     if (page.title.empty() || page.title.size() > 256 || page.body.empty() || page.body.size() > 4096)
       return false;
+    else if ((!page.image_source.empty() && (fixture.version != "2" || page.image_source.size() > 2800000
+             || (!page.image_source.starts_with("data:image/png;base64,") && !page.image_source.starts_with("data:image/jpeg;base64,"))
+             || page.image_alt.empty() || page.image_alt.size() > 512 || page.image_hash.size() != 64))) return false;
     else if (page.title.find('\0') != std::string::npos || page.body.find('\0') != std::string::npos) return false;
   }
   return true;

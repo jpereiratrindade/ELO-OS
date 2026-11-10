@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
 import hashlib
+import base64
 from pathlib import Path
 import sys
 import tempfile
@@ -111,6 +112,30 @@ class ImportTest(unittest.TestCase):
         self.seal()
         data, _ = importer.project(self.source, ['text-2', 'text-1'])
         self.assertEqual(content.decode(data)['pages'][0]['title'], 'Segundo')
+
+    def test_image_projection_integrity_and_unsupported_media(self):
+        raw = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aDXsAAAAASUVORK5CYII=')
+        self.write('assets/images/test.png', raw)
+        self.variant['presentation']['media'] = ['assets/images/test.png']
+        self.write('catalog/variants/text.json', content.encoded(self.variant))
+        self.seal()
+        data, _ = importer.project(self.source, ['text-1'])
+        value = content.fixture(data)
+        self.assertEqual(value['version'], '2')
+        image = value['pages'][0]['image']
+        self.assertEqual(base64.b64decode(image['base64']), raw)
+        self.assertEqual(image['sha256'], hashlib.sha256(raw).hexdigest())
+        self.assertEqual(image['alt'], 'Título ELO')
+        importer.import_bundle(self.source, self.destination, ['text-1'])
+        self.previous = (self.destination / 'active.json').read_bytes()
+        for media in (['../outside.png'], ['https://example.com/x.png'], ['assets/missing.png'],
+                      ['assets/images/test.png', 'assets/images/test.png'], ['assets/sound.mp3']):
+            self.variant['presentation']['media'] = media
+            self.write('catalog/variants/text.json', content.encoded(self.variant))
+            self.seal()
+            self.rejected()
+        image['sha256'] = '0' * 64
+        with self.assertRaises(ValueError): content.fixture(content.encoded(value))
 
     def test_client_bounds_rejected_before_activation(self):
         self.variant['presentation']['text'] = 'x' * 4097

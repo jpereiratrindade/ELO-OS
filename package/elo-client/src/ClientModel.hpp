@@ -10,6 +10,8 @@ class ClientModel : public QObject {
   Q_PROPERTY(QString state READ state NOTIFY changed)
   Q_PROPERTY(QString title READ title NOTIFY changed)
   Q_PROPERTY(QString body READ body NOTIFY changed)
+  Q_PROPERTY(QString imageSource READ imageSource NOTIFY changed)
+  Q_PROPERTY(QString imageAlt READ imageAlt NOTIFY changed)
   Q_PROPERTY(int pageNumber READ pageNumber NOTIFY changed)
   Q_PROPERTY(int pageCount READ pageCount NOTIFY changed)
   Q_PROPERTY(QString fixtureLabel READ fixtureLabel NOTIFY changed)
@@ -26,6 +28,8 @@ class ClientModel : public QObject {
   QString state() const;
   QString title() const;
   QString body() const;
+  QString imageSource() const;
+  QString imageAlt() const;
   int pageNumber() const { return client_.page_count() ? static_cast<int>(client_.index() + 1) : 0; }
   int pageCount() const { return static_cast<int>(client_.page_count()); }
   QString fixtureLabel() const;

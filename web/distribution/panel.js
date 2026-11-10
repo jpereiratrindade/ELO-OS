@@ -17,7 +17,7 @@ function preview() {
   for (const [index,id] of selected.entries()) {
     const variant=state.variants.find(v=>v.id===id); if(!variant)continue;
     const article=document.createElement('article'); const title=document.createElement('h2'); const body=document.createElement('p');
-    title.textContent=`${index+1}. ${variant.title}`; body.textContent=variant.text; article.append(title,body);container.append(article);
+    title.textContent=`${index+1}. ${variant.title}`; body.textContent=variant.text; article.append(title,body);if(variant.image){const note=document.createElement('p');note.className='hint';note.textContent=`Imagem incluída no cliente: ${variant.image.alt}`;article.append(note);}container.append(article);
   }
   if(!selected.length)container.textContent='Selecione conteúdo para conferir prévia.';
 }
@@ -38,6 +38,7 @@ function render() {
     const check=document.createElement('input');check.type='checkbox';check.value=variant.id;check.checked=selected.includes(variant.id);check.disabled=!variant.supported;
     check.addEventListener('change',()=>{if(check.checked){if(selected.length===32){check.checked=false;message('Limite de 32 páginas.',true);return;}selected.push(variant.id);}else selected=selected.filter(id=>id!==variant.id);preview();});
     const detail=document.createElement('div');const title=document.createElement('strong');title.textContent=variant.title;const id=document.createElement('small');id.textContent=variant.id;const text=document.createElement('p');text.textContent=variant.text;detail.append(title,id,text);
+    if(variant.image){const tag=document.createElement('span');tag.className='tag';tag.textContent='Texto + imagem';detail.append(tag);}
     if(!variant.supported){const tag=document.createElement('span');tag.className='tag';tag.textContent='Requer capacidade ainda não disponível no cliente';detail.append(tag);}
     label.append(check,detail);container.append(label);
   }
@@ -47,7 +48,7 @@ async function refresh(){try{state=await api('/manage/status');selected=[...stat
 byId('login-form').addEventListener('submit',async event=>{event.preventDefault();token=byId('key').value.trim();byId('key').value='';try{state=await api('/manage/status');sessionStorage.setItem('eloAdminToken',token);selected=[...state.selected];render();message('Acesso administrativo autorizado.');}catch(error){message(error.message,true);}});
 byId('logout').addEventListener('click',async()=>{try{await api('/manage/logout',{method:'POST'});}catch{}logout();message('Sessão encerrada neste navegador.');});
 byId('refresh').addEventListener('click',refresh);
-byId('selection-form').addEventListener('submit',async event=>{event.preventDefault();if(!selected.length){message('Selecione ao menos uma variante textual.',true);return;}byId('publish').disabled=true;try{await api('/manage/selection',{method:'POST',body:JSON.stringify({variants:selected,expected_hash:state.manifest.content_hash})});await refresh();message('Seleção publicada. Cliente consultará atualização em até 30 segundos; aplique ao Recomeçar.');}catch(error){message(error.message,true);}finally{byId('publish').disabled=false;}});
+byId('selection-form').addEventListener('submit',async event=>{event.preventDefault();if(!selected.length){message('Selecione ao menos uma página compatível.',true);return;}byId('publish').disabled=true;try{await api('/manage/selection',{method:'POST',body:JSON.stringify({variants:selected,expected_hash:state.manifest.content_hash})});await refresh();message('Seleção publicada. Cliente consultará atualização em até 30 segundos; aplique ao Recomeçar.');}catch(error){message(error.message,true);}finally{byId('publish').disabled=false;}});
 if(token)refresh();
 
 let deliveryBusy=false;

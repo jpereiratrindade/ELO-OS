@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Host-only fixture activation. SHA-256 checks integrity, not publisher identity."""
 import argparse
+import base64
 import fcntl
 import hashlib
 import json
@@ -11,7 +12,8 @@ import re
 import shutil
 import tempfile
 
-MAX_CONTENT = 256 * 1024
+MAX_CONTENT = 8 * 1024 * 1024
+MAX_IMAGE = 2 * 1024 * 1024
 HEX = re.compile(r'[0-9a-f]{64}')
 
 
@@ -38,7 +40,7 @@ def fixture(data):
     value = decode(data)
     if not isinstance(value, dict) or set(value) != {'schema', 'id', 'name', 'version', 'pages'}:
         raise ValueError('Unsupported fixture fields')
-    if type(value['schema']) is not int or value['schema'] != 1 or value['version'] != '1':
+    if type(value['schema']) is not int or value['schema'] != 1 or value['version'] not in ('1', '2'):
         raise ValueError('Unsupported fixture version')
 
     def text(value, limit):
@@ -50,9 +52,21 @@ def fixture(data):
     if not isinstance(pages, list) or not 1 <= len(pages) <= 32:
         raise ValueError('Invalid page count')
     for page in pages:
-        if (not isinstance(page, dict) or set(page) != {'title', 'body'}
+        if (not isinstance(page, dict) or set(page) not in ({'title', 'body'}, {'title', 'body', 'image'})
                 or not text(page['title'], 256) or not text(page['body'], 4096)):
             raise ValueError('Invalid page')
+        if 'image' in page:
+            image = page['image']
+            if (value['version'] != '2' or not isinstance(image, dict)
+                    or set(image) != {'mime', 'sha256', 'base64', 'alt'}
+                    or image['mime'] not in ('image/png', 'image/jpeg')
+                    or not text(image['alt'], 512) or not isinstance(image['base64'], str)):
+                raise ValueError('Invalid image metadata')
+            raw = base64.b64decode(image['base64'], validate=True)
+            if (not 0 < len(raw) <= MAX_IMAGE or hashlib.sha256(raw).hexdigest() != image['sha256']
+                    or (image['mime'] == 'image/png' and not raw.startswith(b'\x89PNG\r\n\x1a\n'))
+                    or (image['mime'] == 'image/jpeg' and not (raw.startswith(b'\xff\xd8') and raw.rstrip(b'\xff\x00').endswith(b'\xff\xd9')))):
+                raise ValueError('Invalid image bytes/hash')
     return value
 
 

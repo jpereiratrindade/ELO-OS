@@ -80,6 +80,13 @@ e apresentação, com horário da última comunicação. [Acesso e fluxo editori
 Cliente e painel seguem identidade visual do MORFO. Integração foi testada no host;
 a imagem Pi 5 ainda precisa ser recompilada e validada para essa capacidade.
 
+### Texto e imagem no cliente
+
+Cliente agora apresenta uma imagem PNG/JPEG por página, validada e armazenada junto
+ao texto para uso offline. Painel libera variantes compatíveis como Campos Sulinos.
+[Uso, limites e testes](docs/client/image-content.md). Atualize cliente com
+`./scripts/run-thin-client.sh`; escolha conteúdo no painel e aplique ao Recomeçar.
+
 ### Primeiro consumo de conteúdo editorial ELO
 
 Cliente aceita agora projeção explícita de variantes textuais de bundles ELO

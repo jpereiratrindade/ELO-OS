@@ -10,7 +10,7 @@ import threading
 from urllib.parse import urlsplit, unquote
 
 from elo_content import decode, encoded, sync_dir
-from elo_import import snapshot, records, project
+from elo_import import snapshot, records, project, project_snapshot
 from elo_receipts import Receipts
 import os
 import tempfile
@@ -41,14 +41,17 @@ class Panel:
         choices = []
         for key, value in variants.items():
             presentation = value.get('presentation', {})
-            supported = (value.get('interaction', 'none') == 'none'
-                         and not presentation.get('media') and not presentation.get('options')
-                         and not presentation.get('correct_option')
-                         and bool(presentation.get('title')) and bool(presentation.get('text'))
-                         and value.get('content_id') in atoms
-                         and (value.get('content_id') in selected or (not selected and manifest['schema_version'] == '0.1')))
+            image_info = None
+            try:
+                projected, _ = project_snapshot(manifest, files, [key])
+                image = decode(projected)['pages'][0].get('image')
+                if image:
+                    image_info = {'alt': image['alt'], 'mime': image['mime']}
+                supported = True
+            except (ValueError, TypeError, KeyError):
+                supported = False
             choices.append({'id': key, 'title': presentation.get('title', key),
-                            'text': presentation.get('text', ''), 'supported': supported})
+                            'text': presentation.get('text', ''), 'supported': supported, 'image': image_info})
         return {'manifest': manifest, 'variants': choices, 'selected': self.variants(),
                 'studio_available': self.studio_available(), 'delivery': self.delivery()}
 

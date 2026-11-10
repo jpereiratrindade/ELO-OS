@@ -6,6 +6,8 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
+#include <QImageReader>
+#include <QBuffer>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QQuickWindow>
@@ -18,7 +20,7 @@
 #include <time.h>
 
 namespace {
-constexpr qsizetype max_content = 256 * 1024;
+constexpr qsizetype max_content = 8 * 1024 * 1024;
 QByteArray bounded_file(const QString& path, qsizetype limit) {
   if (QFileInfo(path).isSymLink()) return {};
   QFile file(path);
@@ -71,9 +73,33 @@ elo::LoadResult JsonCatalog::load() {
   if (pages.isEmpty() || pages.size() > 32) return {elo::LoadStatus::invalid, {}};
   for (const auto& value : pages) {
     const auto page = value.toObject();
-    if (!keys(page, {"title", "body"}) || !page["title"].isString() || !page["body"].isString())
+    if ((!keys(page, {"title", "body"}) && !keys(page, {"title", "body", "image"})) || !page["title"].isString() || !page["body"].isString())
       return {elo::LoadStatus::invalid, {}};
     fixture.pages.push_back({page["title"].toString().toStdString(), page["body"].toString().toStdString()});
+    if (page.contains("image")) {
+      const auto image = page["image"].toObject();
+      if (fixture.version != "2" || !keys(image, {"mime", "sha256", "base64", "alt"})
+          || !image["base64"].isString() || !image["alt"].isString()) return {elo::LoadStatus::invalid, {}};
+      const auto mime = image["mime"].toString();
+      if (mime != "image/png" && mime != "image/jpeg") return {elo::LoadStatus::invalid, {}};
+      const auto encoded = image["base64"].toString().toLatin1();
+      if (encoded.size() > 2800000) return {elo::LoadStatus::invalid, {}};
+      auto raw = QByteArray::fromBase64(encoded, QByteArray::AbortOnBase64DecodingErrors);
+      if (raw.isEmpty() || raw.size() > 2 * 1024 * 1024
+          || QCryptographicHash::hash(raw, QCryptographicHash::Sha256).toHex() != image["sha256"].toString().toLatin1())
+        return {elo::LoadStatus::invalid, {}};
+      QBuffer buffer(&raw);
+      buffer.open(QIODevice::ReadOnly);
+      QImageReader reader(&buffer, mime == "image/png" ? "png" : "jpeg");
+      const auto size = reader.size();
+      if (!size.isValid() || size.width() > 4096 || size.height() > 4096
+          || static_cast<qint64>(size.width()) * size.height() > 8 * 1024 * 1024 || reader.read().isNull())
+        return {elo::LoadStatus::invalid, {}};
+      auto& output = fixture.pages.back();
+      output.image_source = ("data:" + mime.toLatin1() + ";base64," + raw.toBase64()).toStdString();
+      output.image_alt = image["alt"].toString().toStdString();
+      output.image_hash = image["sha256"].toString().toStdString();
+    }
   }
   fixture.content_hash = QCryptographicHash::hash(QByteArray::fromStdString(stored.utf8), QCryptographicHash::Sha256).toHex().toStdString();
   return {elo::LoadStatus::loaded, std::move(fixture)};  // Core also checks version/text limits.
@@ -108,13 +134,16 @@ QtRuntime::QtRuntime(QQuickWindow& window, ClientModel& model, const elo::Clock&
   // During synchronization the GUI thread is blocked. Copy identity with the
   // scene being rendered, rather than reading newer model state after a queued frame.
   QObject::connect(&window_, &QQuickWindow::beforeSynchronizing, this, [this] {
+    rendering_media_ready_ = window_.property("contentReady").toBool();
     rendering_page_ = model_.presentationDigest();
     rendering_content_ = model_.contentDigest();
   }, Qt::DirectConnection);
   QObject::connect(&window_, &QQuickWindow::frameSwapped, this, [this] {
+    const bool ready = rendering_media_ready_;
     const auto page = rendering_page_;
     const auto content = rendering_content_;
-    QMetaObject::invokeMethod(this, [this, page, content] {
+    QMetaObject::invokeMethod(this, [this, page, content, ready] {
+      if (!ready) return;
       if (page != model_.presentationDigest() || content != model_.contentDigest()) return;
       model_.presentationReady();
       model_.confirmPresented(content);

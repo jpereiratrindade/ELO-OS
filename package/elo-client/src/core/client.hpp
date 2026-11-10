@@ -15,6 +15,9 @@ std::string_view state_name(State state);
 struct Page {
   std::string title;
   std::string body;
+  std::string image_source;
+  std::string image_alt;
+  std::string image_hash;
   bool operator==(const Page&) const = default;
 };
 struct Fixture {

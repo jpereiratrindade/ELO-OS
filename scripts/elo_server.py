@@ -162,6 +162,10 @@ def server(bundle, variants, token, host='127.0.0.1', port=0, panel=None):
                 return
             try:
                 body = envelope(bundle, panel.variants() if panel else variants)
+                from elo_content import decode
+                if decode(decode(body)['presentation'].encode())['version'] == '2' and 'image-v2' not in self.headers.get('X-ELO-Capabilities', '').split(','):
+                    self.respond(409, b'{"error":"image_capability_required"}')
+                    return
             except (OSError, ValueError, UnicodeError, KeyError):
                 self.respond(503, b'{"error":"publication_unavailable"}')
                 return

@@ -27,9 +27,8 @@ navegador não foi alterada. Isso explica o aviso de certificado mostrado no nav
    uma versão ELO. É o frontend e backend existentes no projeto ELO, não outro banco
    editorial. O workspace existente continua em `$HOME/.local/share/elo/content`.
 2. Volte a **Distribuição** e Atualizar. O painel lê o bundle ELO publicado em `current`.
-3. Selecione variantes na ordem desejada e confira a prévia. Somente variantes
-   textuais compatíveis podem ser selecionadas. Imagens, áudio e interações continuam
-   recursos do editor, mas ainda não podem ser entregues pelo atual cliente textual.
+3. Selecione variantes na ordem desejada e confira a prévia. Variantes de texto e uma imagem PNG/JPEG podem ser selecionadas com cliente atualizado.
+   Áudio e interações continuam recursos do editor ainda não executados pelo cliente.
 4. Clique **Publicar seleção para o cliente**. Isso persiste a seleção de distribuição;
    não cria nem altera versão editorial. O hash da publicação é revalidado para evitar
    confirmar uma seleção sobre publicação que mudou enquanto a página estava aberta.
@@ -87,3 +86,5 @@ encaminhamento editorial e sessão restrita de mídia. Ensaio em navegador e upl
 nativo isolado registrados na [evidência](../evidence/D2-SERVER-PANEL-20261110.md).
 
 Continuidade: [confirmações de entrega e correção de ativação](delivery-receipts.md).
+
+[Capacidade de texto e imagem](image-content.md).

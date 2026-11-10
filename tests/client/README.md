@@ -97,3 +97,5 @@ Recarga local: testes do núcleo verificam revalidação ao Recomeçar, candidat
 revogado, falhas, duplicatas e retorno a publicação anterior. Teste Qt
 `liveContentWaitsForSessionBoundary` publica em armazenamento real, verifica detecção
 pelo timer, troca pelo botão da interface e preservação após corrupção do apontador.
+
+Texto e imagem: [contrato, ensaios e limites](../../docs/client/image-content.md). Teste Qt `imagePresentationRequiresValidatedPixels` cobre pixel renderizado, alt, confirmação e recusa de imagem inválida.
