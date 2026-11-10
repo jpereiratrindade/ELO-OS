@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Read-only ELO text distribution service, protocol 1 (one terminal credential)."""
+"""Read-only ELO text distribution service, protocol 1 with individual terminal credentials."""
 import argparse
 import hashlib
 import hmac
@@ -36,8 +36,14 @@ def terminal_token(path, create=False):
     return token
 
 
-def envelope(bundle, variants):
+def envelope(bundle, variants, exposure_seconds=0):
     data, source = project(bundle, variants)
+    if exposure_seconds:
+        from elo_content import decode, fixture
+        value = decode(data)
+        value.update(version="4", exposure_seconds=exposure_seconds)
+        data = encoded(value)
+        fixture(data)
     return encoded({'schema': 1, 'sha256': hashlib.sha256(data).hexdigest(),
                     'size': len(data), 'presentation': data.decode('utf-8'),
                     'source': {'bundle_id': source['bundle_id'], 'version': source['version'],
@@ -68,12 +74,19 @@ def server(bundle, variants, token, host='127.0.0.1', port=0, panel=None):
             auth = self.headers.get_all('Authorization', [])
             return len(auth) == 1 and hmac.compare_digest(auth[0].encode('utf-8'), b'Bearer ' + credential)
 
+        def terminal_identity(self):
+            if self.authorized(token): return 'local'
+            values = self.headers.get_all('Authorization', [])
+            if panel and len(values) == 1 and values[0].startswith('Bearer '):
+                return panel.terminals.authenticate(values[0][7:].encode('utf-8'))
+            return None
+
         def admin_request(self, method):
             if not panel or not self.authorized(panel.token):
                 self.respond(401, b'{"error":"unauthorized"}')
                 return
             scheme = 'https' if isinstance(self.connection, ssl.SSLSocket) else 'http'
-            allowed = {f'{scheme}://localhost:{self.server.server_port}', f'{scheme}://127.0.0.1:{self.server.server_port}'}
+            allowed = {f'{scheme}://localhost:{self.server.server_port}', f'{scheme}://127.0.0.1:{self.server.server_port}', f'{scheme}://{self.headers.get("Host", "")}'}
             if self.headers.get('Origin') and self.headers['Origin'] not in allowed:
                 self.respond(403, b'{"error":"origin_rejected"}')
                 return
@@ -89,6 +102,14 @@ def server(bundle, variants, token, host='127.0.0.1', port=0, panel=None):
                     self.respond(200, encoded(panel.status()), extra_headers=[('Set-Cookie', 'elo_media=' + panel.media_cookie() + '; Path=/studio/assets/; HttpOnly; SameSite=Strict' + ('; Secure' if scheme == 'https' else ''))])
                 elif self.path == '/manage/delivery' and method == 'GET':
                     self.respond(200, encoded(panel.delivery()))
+                elif self.path == '/manage/terminals' and method == 'GET':
+                    self.respond(200, encoded(panel.terminal_status()))
+                elif self.path == '/manage/terminals' and method == 'POST':
+                    from elo_content import decode
+                    if size > 1024: raise ValueError('Terminal request too large')
+                    self.respond(201, encoded(panel.terminals.add(decode(body))))
+                elif self.path.startswith('/manage/terminals/') and self.path.endswith('/revoke') and method == 'POST':
+                    self.respond(200, encoded(panel.terminals.revoke(self.path.split('/')[3])))
                 elif self.path == '/manage/logout' and method == 'POST':
                     self.respond(200, b'{}', extra_headers=[('Set-Cookie', 'elo_media=; Max-Age=0; Path=/studio/assets/; HttpOnly; SameSite=Strict')])
                 elif self.path == '/manage/selection' and method == 'POST':
@@ -108,7 +129,8 @@ def server(bundle, variants, token, host='127.0.0.1', port=0, panel=None):
 
         def do_POST(self):
             if self.path == '/v1/receipt':
-                if not self.authorized(token):
+                identity = self.terminal_identity()
+                if not identity:
                     self.respond(401, b'{"error":"unauthorized"}')
                     return
                 try:
@@ -116,7 +138,7 @@ def server(bundle, variants, token, host='127.0.0.1', port=0, panel=None):
                     size = int(self.headers.get('Content-Length', '0'))
                     if self.headers.get('Transfer-Encoding') or not 1 <= size <= 2048:
                         raise ValueError('Invalid receipt size')
-                    receipts.accept(decode(self.rfile.read(size)))
+                    (panel.terminals.receipt(identity) if panel else receipts).accept(decode(self.rfile.read(size)))
                     self.respond(200, b'{"accepted":true}')
                 except (ValueError, OSError, UnicodeError):
                     self.respond(400, b'{"error":"receipt_rejected"}')
@@ -154,17 +176,22 @@ def server(bundle, variants, token, host='127.0.0.1', port=0, panel=None):
             if self.path.startswith(('/manage/', '/api/')):
                 self.admin_request('GET')
                 return
-            if not self.authorized(token):
+            if not self.terminal_identity():
                 self.respond(401, b'{"error":"unauthorized"}')
                 return
             if self.path != '/v1/presentation':
                 self.respond(404, b'{"error":"not_found"}')
                 return
             try:
-                body = envelope(bundle, panel.variants() if panel else variants)
+                body = panel.envelope() if panel else envelope(bundle, variants)
                 from elo_content import decode
-                if decode(decode(body)['presentation'].encode())['version'] == '2' and 'image-v2' not in self.headers.get('X-ELO-Capabilities', '').split(','):
-                    self.respond(409, b'{"error":"image_capability_required"}')
+                presentation = decode(decode(body)['presentation'].encode())
+                required = set()
+                if any('image' in page for page in presentation['pages']): required.add('image-v2')
+                if any(page.get('interaction') == 'reveal' for page in presentation['pages']): required.add('reveal-v3')
+                if presentation['version'] == '4': required.add('autoplay-v4')
+                if not required.issubset(self.headers.get('X-ELO-Capabilities', '').split(',')):
+                    self.respond(409, b'{"error":"content_capability_required"}')
                     return
             except (OSError, ValueError, UnicodeError, KeyError):
                 self.respond(503, b'{"error":"publication_unavailable"}')

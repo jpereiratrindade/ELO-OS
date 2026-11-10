@@ -9,4 +9,7 @@ export QT_QPA_FONTDIR=/usr/share/fonts/dejavu
 export XDG_RUNTIME_DIR=/run/elo-client
 mkdir -p "$XDG_RUNTIME_DIR"
 chmod 700 "$XDG_RUNTIME_DIR"
+if [ -s /etc/elo-terminal/server.url ]; then
+    exec /usr/bin/elo-terminal "$@"
+fi
 exec /usr/bin/elo-client --fullscreen --exit-on-escape "$@"

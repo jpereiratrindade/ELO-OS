@@ -78,7 +78,8 @@ Painel web disponível em `https://localhost:8443/`, com acesso ao Estúdio edit
 e seleção do conteúdo entregue. Confirmações do cliente distinguem recebimento
 e apresentação, com horário da última comunicação. [Acesso e fluxo editorial](docs/client/server-panel.md).
 Cliente e painel seguem identidade visual do MORFO. Integração foi testada no host;
-a imagem Pi 5 ainda precisa ser recompilada e validada para essa capacidade.
+a imagem `pi5-client` foi recompilada e passou no ensaio de boot ARM64 sem
+periféricos; validação no Pi físico continua pendente.
 
 ### Texto e imagem no cliente
 
@@ -86,6 +87,38 @@ Cliente agora apresenta uma imagem PNG/JPEG por página, validada e armazenada j
 ao texto para uso offline. Painel libera variantes compatíveis como Campos Sulinos.
 [Uso, limites e testes](docs/client/image-content.md). Atualize cliente com
 `./scripts/run-thin-client.sh`; escolha conteúdo no painel e aplique ao Recomeçar.
+
+### Manutenção remota do Pi
+
+Perfil `pi5-client` inclui SSH por chave, relógio automático e `elo-diagnose`.
+Administração remota permanece disponível com apresentação parada.
+[Preparação e acesso](docs/client/remote-maintenance.md).
+
+### Acompanhamento de totens
+
+Painel mostra publicação e última página confirmada de cada totem, modo de reprodução
+e último contato. Credenciais individuais permitem PC e Pi simultâneos.
+[Uso e limites](docs/client/terminal-monitoring.md).
+
+### Inicialização automática no PC e Pi 5
+
+Provisionamento prepara servidor, credencial, cache inicial e Wi-Fi do Pi com senha
+solicitada sem eco. PC inicia junto da sessão gráfica; Pi configurado inicia no boot.
+[Instalação e roteiro](docs/client/terminal-provisioning.md).
+
+### Totem sem mouse
+
+Reprodução automática em ciclo, tempo de exposição configurável pelo servidor e
+rolagem automática. Conteúdo e programação permanecem disponíveis offline.
+[Configuração e limites](docs/client/automatic-playback.md).
+[Lançador supervisionado](docs/client/supervised-playback.md) recupera processo
+encerrado ou sem progresso de frames.
+
+### Toque para revelar
+
+Variantes ELO `reveal` agora ocultam texto e imagem até toque em **Revelar**.
+Funcionam offline; Recomeçar limpa revelações da sessão.
+[Uso e contrato](docs/client/reveal-interaction.md).
 
 ### Primeiro consumo de conteúdo editorial ELO
 

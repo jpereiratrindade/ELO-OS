@@ -55,7 +55,12 @@ def main():
             if gui and profile != "pi5-client" and "BR2_PACKAGE_LIBDRM=y" not in text.splitlines():
                 raise RuntimeError(f"{profile}: libdrm ausente")
             if profile == "pi5-client":
+                if 'consoleblank=0' not in (ROOT / 'board/elo/pi5-client/cmdline.txt').read_text().split():
+                    raise RuntimeError('pi5-client: blanking de console precisa estar desativado')
+                if not (ROOT / 'board/elo/pi5-client/rootfs-overlay/etc/init.d/S50elo-client').is_file():
+                    raise RuntimeError('pi5-client: serviço automático ausente')
                 for line in ("BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI_WIFI=y",
+                             "BR2_PACKAGE_DROPBEAR=y", "BR2_PACKAGE_CHRONY=y",
                              "BR2_PACKAGE_WIRELESS_REGDB=y", "BR2_PACKAGE_IW=y",
                              "BR2_PACKAGE_WPA_SUPPLICANT_NL80211=y",
                              "BR2_PACKAGE_WPA_SUPPLICANT_CLI=y",
@@ -71,7 +76,9 @@ def main():
                     if not any(line.startswith(symbol + '=') and f'/board/elo/appliance/{suffix}' in line
                                for line in text.splitlines()):
                         raise RuntimeError(f'{profile}: integração appliance ausente: {symbol}')
-            forbidden = ["BR2_PACKAGE_OPENSSH=y", "BR2_PACKAGE_DROPBEAR=y", "BR2_PACKAGE_SUDO=y"]
+            forbidden = ["BR2_PACKAGE_OPENSSH=y", "BR2_PACKAGE_SUDO=y"]
+            if profile != 'pi5-client':
+                forbidden += ["BR2_PACKAGE_DROPBEAR=y", "BR2_PACKAGE_CHRONY=y"]
             if gui:
                 forbidden += ["BR2_PACKAGE_QT6BASE_OPENGL=y",
                               "BR2_PACKAGE_XORG7=y", "BR2_PACKAGE_WESTON=y"]

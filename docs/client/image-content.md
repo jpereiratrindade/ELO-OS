@@ -2,7 +2,7 @@
 
 Primeira capacidade visual além de texto: uma imagem PNG ou JPEG por página, com
 texto alternativo, download validado e cache offline. Compatível com variantes
-ELO `interaction: none`; não converte perguntas, áudio, vídeo ou receitas em texto.
+ELO `interaction: none` e, no formato 3, [reveal](reveal-interaction.md); não converte perguntas, áudio, vídeo ou receitas em texto.
 
 ## Usar no Fedora
 
@@ -26,7 +26,7 @@ Não usa nem altera cache operacional de `run-thin-client.sh`.
 ## Contrato e limites
 
 - Envelope de distribuição continua schema 1. Catálogo local passa a aceitar versões
-  `1` (texto) e `2` (texto com imagem opcional em cada página).
+  `1` (texto), `2` (texto com imagem opcional) e `3` (reveal, com imagem opcional).
 - Página com imagem mantém `title` e `body` e acrescenta `image` com exatamente
   `mime`, `base64`, `sha256` e `alt`.
 - Imagem vem dos arquivos já incluídos no hash nativo do bundle ELO. Referência
@@ -42,7 +42,7 @@ Não usa nem altera cache operacional de `run-thin-client.sh`.
   não cabem e são recusadas. Limites de espaço disponível e bundles do cache continuam.
 - Conteúdo e imagens ficam no mesmo JSON validado/hasheado, portanto sua ativação
   permanece atômica. Nenhum arquivo auxiliar pode faltar depois da publicação local.
-- Cliente anuncia `X-ELO-Capabilities: text-v1,image-v2`. Servidor exige `image-v2`
+- Cliente anuncia `X-ELO-Capabilities: text-v1,image-v2,reveal-v3`. Servidor exige `image-v2`
   antes de entregar catálogo com imagens. Cliente antigo recebe HTTP 409 e preserva
   cache anterior, em vez de aceitar conteúdo que não consegue apresentar.
 
@@ -86,7 +86,8 @@ HTTPS e reinício offline foram executados. Imagem com hash divergente, dimensã
 excessiva ou bytes inválidos não substitui cache anterior. Foto JPEG original também
 passou por importação e apresentação; captura em `build/client-campos-sulinos.png`.
 
-Kconfig habilita PNG/JPEG em Qt nos perfis com cliente. Não foi recompilada imagem
-Buildroot nem validado Pi 5. Desempenho/memória desses limites ainda precisam de ensaio
-na plataforma embarcada. Áudio, vídeo, múltiplas imagens por página e interações
+Kconfig habilita PNG/JPEG em Qt nos perfis com cliente. Imagem `pi5-client` foi
+recompilada e apresentou JPEG no ensaio ARM64 de boot automático.
+[Evidência](../evidence/C6-PI5-AUTOSTART-20261110.md). Pi físico ainda não foi validado. Desempenho/memória desses limites ainda precisam de ensaio
+na plataforma embarcada. Áudio, vídeo, múltiplas imagens por página e interações além de `reveal`
 permanecem recusados. [Evidência desta entrega](../evidence/C1-IMAGE-CLIENT-20261110.md).

@@ -38,10 +38,15 @@ def fixture(data):
     if not 0 < len(data) <= MAX_CONTENT:
         raise ValueError('Fixture size out of bounds')
     value = decode(data)
-    if not isinstance(value, dict) or set(value) != {'schema', 'id', 'name', 'version', 'pages'}:
+    if not isinstance(value, dict) or set(value) not in ({'schema', 'id', 'name', 'version', 'pages'}, {'schema', 'id', 'name', 'version', 'pages', 'exposure_seconds'}):
         raise ValueError('Unsupported fixture fields')
-    if type(value['schema']) is not int or value['schema'] != 1 or value['version'] not in ('1', '2'):
+    if type(value['schema']) is not int or value['schema'] != 1 or value['version'] not in ('1', '2', '3', '4'):
         raise ValueError('Unsupported fixture version')
+
+    if 'exposure_seconds' in value and (value['version'] != '4' or type(value['exposure_seconds']) is not int or not 5 <= value['exposure_seconds'] <= 3600):
+        raise ValueError('Invalid exposure time')
+    if value['version'] == '4' and 'exposure_seconds' not in value:
+        raise ValueError('Missing exposure time')
 
     def text(value, limit):
         return isinstance(value, str) and 0 < len(value.encode('utf-8')) <= limit and '\0' not in value
@@ -52,12 +57,14 @@ def fixture(data):
     if not isinstance(pages, list) or not 1 <= len(pages) <= 32:
         raise ValueError('Invalid page count')
     for page in pages:
-        if (not isinstance(page, dict) or set(page) not in ({'title', 'body'}, {'title', 'body', 'image'})
+        if (not isinstance(page, dict) or not {'title', 'body'} <= set(page) or set(page) - {'title', 'body', 'image', 'interaction'}
                 or not text(page['title'], 256) or not text(page['body'], 4096)):
             raise ValueError('Invalid page')
+        if 'interaction' in page and (value['version'] not in ('3', '4') or page['interaction'] not in ('none', 'reveal')):
+            raise ValueError('Unsupported interaction')
         if 'image' in page:
             image = page['image']
-            if (value['version'] != '2' or not isinstance(image, dict)
+            if (value['version'] not in ('2', '3', '4') or not isinstance(image, dict)
                     or set(image) != {'mime', 'sha256', 'base64', 'alt'}
                     or image['mime'] not in ('image/png', 'image/jpeg')
                     or not text(image['alt'], 512) or not isinstance(image['base64'], str)):

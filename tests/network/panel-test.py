@@ -77,6 +77,65 @@ class PanelTest(unittest.TestCase):
         restored = Panel(self.bundle, ['v1'], b'a' * 43, self.panel.selection_file, self.panel.web_root)
         self.assertEqual(restored.variants(), ['v2', 'v1'])
 
+    def test_exposure_persists_and_changes_delivery_digest(self):
+        before = decode(self.panel.envelope())['sha256']
+        self.panel.select({'variants': ['v1'], 'expected_hash': self.hash, 'exposure_seconds': 15})
+        envelope = decode(self.panel.envelope())
+        presentation = decode(envelope['presentation'].encode())
+        self.assertEqual(presentation['version'], '4')
+        self.assertEqual(presentation['exposure_seconds'], 15)
+        self.assertNotEqual(envelope['sha256'], before)
+        restored = Panel(self.bundle, ['v1'], b'a' * 43, self.panel.selection_file, self.panel.web_root)
+        self.assertEqual(restored.exposure_seconds(), 15)
+        for seconds in (True, 4, 3601, 2.5, '15', None):
+            with self.assertRaises(ValueError):
+                self.panel.select({'variants': ['v1'], 'expected_hash': self.hash, 'exposure_seconds': seconds})
+        self.assertEqual(restored.exposure_seconds(), 15)
+        self.panel.select({'variants': ['v1'], 'expected_hash': self.hash, 'exposure_seconds': 0})
+        self.assertEqual(decode(self.panel.envelope())['sha256'], before)
+
+    def test_individual_terminals_isolate_status_and_revocation(self):
+        status, body = self.request('/manage/terminals', 'POST', {'name': 'Recepção'})
+        self.assertEqual(status, 201)
+        first = decode(body)
+        second = decode(self.request('/manage/terminals', 'POST', {'name': 'Sala 2'})[1])
+        self.assertNotEqual(first['id'], second['id'])
+        self.assertNotIn(first['token'], self.panel.terminals.path.read_text())
+        report = {'schema': 2, 'session': '12345678-1234-1234-1234-123456789abc', 'sequence': 1,
+            'received_sha256': 'a' * 64, 'presented_sha256': 'a' * 64,
+            'display': {'publication': 'Pampa v1', 'title': 'Campos Sulinos', 'page': 2, 'pages': 3,
+                        'mode': 'automatic', 'exposure_seconds': 15}}
+        self.assertEqual(self.request('/v1/receipt', 'POST', report, token=first['token'].encode())[0], 200)
+        devices = decode(self.request('/manage/terminals')[1])
+        one = next(d for d in devices if d['id'] == first['id'])
+        two = next(d for d in devices if d['id'] == second['id'])
+        self.assertEqual(one['display']['title'], 'Campos Sulinos')
+        self.assertTrue(one['recent'])
+        self.assertIsNone(two['last_seen'])
+        self.assertNotIn(first['token'], encoded(devices).decode())
+        self.assertEqual(self.request('/manage/status', token=first['token'].encode())[0], 401)
+        self.assertEqual(self.request('/manage/terminals/' + first['id'] + '/revoke', 'POST', {})[0], 200)
+        self.assertEqual(self.request('/v1/presentation', token=first['token'].encode())[0], 401)
+        self.assertEqual(self.request('/v1/receipt', 'POST', report, token=first['token'].encode())[0], 401)
+        self.assertEqual(self.request('/v1/presentation', token=second['token'].encode())[0], 200)
+        restored = Panel(self.bundle, ['v1'], b'a' * 43, self.panel.selection_file, self.panel.web_root)
+        self.assertIsNone(restored.terminals.authenticate(first['token'].encode()))
+        self.assertEqual(restored.terminals.authenticate(second['token'].encode()), second['id'])
+
+    def test_invalid_display_report_cannot_replace_last_confirmed_page(self):
+        value = {'schema': 2, 'session': '12345678-1234-1234-1234-123456789abc', 'sequence': 1,
+            'received_sha256': 'a' * 64, 'presented_sha256': 'a' * 64,
+            'display': {'publication': 'ELO', 'title': 'Página', 'page': 1, 'pages': 2,
+                        'mode': 'automatic', 'exposure_seconds': 15}}
+        self.assertEqual(self.request('/v1/receipt', 'POST', value, token=b't' * 43)[0], 200)
+        for change in ({'page': 3}, {'pages': 0}, {'exposure_seconds': 0}, {'title': 'x' * 257}, {'mode': 'unknown'}):
+            invalid = dict(value, sequence=2, display=value['display'] | change)
+            self.assertEqual(self.request('/v1/receipt', 'POST', invalid, token=b't' * 43)[0], 400)
+        self.assertEqual(self.panel.receipts.record['sequence'], 1)
+        expired = self.panel.receipts.status('a' * 64, now=time.time()+100)
+        self.assertFalse(expired['recent'])
+        self.assertEqual(expired['display']['title'], 'Página')
+
     def test_invalid_stale_or_unsupported_selection_never_changes_state(self):
         for variants, expected in ((['v3'], self.hash), (['v1'], 'stale'), ([], self.hash), (['v1', 'v1'], self.hash)):
             self.assertEqual(self.request('/manage/selection', 'POST', {'variants': variants, 'expected_hash': expected})[0], 400)

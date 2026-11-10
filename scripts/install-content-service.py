@@ -7,6 +7,8 @@ import shutil
 import subprocess
 import os
 import re
+import ipaddress
+import tempfile
 
 from elo_server import envelope, terminal_token
 
@@ -23,8 +25,19 @@ def main():
     parser.add_argument('--bundle', type=Path, required=True)
     parser.add_argument('--variant', action='append', required=True)
     parser.add_argument('--port', type=int, default=8443)
+    parser.add_argument('--host', default='127.0.0.1', help='Listen address; 0.0.0.0 enables IPv4 LAN and localhost')
+    parser.add_argument('--tls-name', action='append', default=[], help='Additional DNS name or IP in local certificate')
+    parser.add_argument('--renew-certificate', action='store_true', help='Reissue existing local certificate with requested names')
     parser.add_argument('--elo-root', type=Path, default=Path(__file__).resolve().parents[2] / 'elo')
     args = parser.parse_args()
+    ipaddress.ip_address(args.host)
+    names = ['DNS:localhost', 'IP:127.0.0.1']
+    for name in args.tls_name:
+        try: names.append('IP:' + str(ipaddress.ip_address(name)))
+        except ValueError:
+            if not re.fullmatch(r'[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?', name):
+                raise ValueError('Invalid TLS DNS name')
+            names.append('DNS:' + name)
     os.umask(0o077)
     source = args.bundle.absolute()  # Preserve current symlink for future publication changes.
     envelope(source, args.variant)
@@ -48,10 +61,28 @@ def main():
         raise ValueError('Incomplete existing TLS material; repair before install')
     if not key.exists():
         subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:3072', '-nodes', '-days', '365',
-                        '-subj', '/CN=localhost', '-addext', 'subjectAltName=DNS:localhost,IP:127.0.0.1',
+                        '-subj', '/CN=localhost', '-addext', 'subjectAltName=' + ','.join(dict.fromkeys(names)),
                         '-keyout', str(key), '-out', str(certificate)], check=True,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    for name in ('elo_server.py', 'elo_import.py', 'elo_content.py', 'elo_panel.py', 'elo_receipts.py'):
+    elif args.renew_certificate:
+        fd, temporary = tempfile.mkstemp(prefix='.server-cert-', dir=private)
+        os.close(fd)
+        try:
+            subprocess.run(['openssl', 'req', '-new', '-x509', '-key', str(key), '-days', '365',
+                '-subj', '/CN=localhost', '-addext', 'subjectAltName=' + ','.join(dict.fromkeys(names)),
+                '-out', temporary], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            os.chmod(temporary, 0o600)
+            os.replace(temporary, certificate)
+        finally:
+            Path(temporary).unlink(missing_ok=True)
+    elif args.tls_name:
+        for name in args.tls_name:
+            try: ipaddress.ip_address(name); option = '-checkip'
+            except ValueError: option = '-checkhost'
+            if subprocess.run(['openssl', 'x509', '-in', str(certificate), '-noout', option, name],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode:
+                raise ValueError('Certificate lacks requested name; use --renew-certificate')
+    for name in ('elo_server.py', 'elo_import.py', 'elo_content.py', 'elo_panel.py', 'elo_receipts.py', 'elo_terminals.py'):
         shutil.copyfile(Path(__file__).parent / name, library / name)
     web = library / 'web'
     shutil.copytree(Path(__file__).resolve().parents[1] / 'web/distribution', web, dirs_exist_ok=True)
@@ -95,7 +126,7 @@ def main():
         'ReadWritePaths=' + quoted(source.parent),
         '', '[Install]', 'WantedBy=default.target', '']))
     command = ['/usr/bin/python3' , '-B', '-s', '-E', '-u', library / 'elo_server.py', '--bundle', source,
-               '--token-file', token, '--cert', certificate, '--key', key, '--host', '127.0.0.1', '--port', str(args.port)]
+               '--token-file', token, '--cert', certificate, '--key', key, '--host', args.host, '--port', str(args.port)]
     command += ['--admin-token-file', admin_token, '--selection-file', state / 'selection.json',
                 '--web-root', web, '--studio-port', '18080']
     for variant in args.variant:

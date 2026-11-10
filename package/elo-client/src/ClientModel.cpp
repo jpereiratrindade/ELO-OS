@@ -12,6 +12,7 @@ QString ClientModel::title() const { return text(client_.page().title); }
 QString ClientModel::body() const { return text(client_.page().body); }
 QString ClientModel::imageSource() const { return text(client_.page().image_source); }
 QString ClientModel::imageAlt() const { return text(client_.page().image_alt); }
+QString ClientModel::publicationName() const { return text(client_.fixture().name); }
 QString ClientModel::fixtureLabel() const {
   if (client_.fixture().id.empty()) return "Conteúdo não carregado";
   return text(client_.fixture().name) + " · formato local v" + text(client_.fixture().version);
@@ -73,7 +74,10 @@ QString ClientModel::contentUpdate() const {
   return {};
 }
 void ClientModel::checkContent() {
-  if (client_.dispatch(elo::CheckContent{})) {
+  const bool updated = client_.dispatch(elo::CheckContent{});
+  // Operator explicitly enabled unattended playback. Enter without a local click.
+  if (!autoplay() && client_.pending_autoplay()) { reset(); return; }
+  if (updated) {
     emit changed();
     qInfo().noquote() << "elo-client content-update=" + contentUpdate();
   }
@@ -90,5 +94,28 @@ QByteArray ClientModel::contentDigest() const {
   return QByteArray::fromStdString(client_.fixture().content_hash);
 }
 void ClientModel::confirmPresented(const QByteArray& digest) {
-  if (client_.usable() && !digest.isEmpty() && digest == contentDigest()) emit contentPresented(digest);
+  if (!client_.usable() || digest.isEmpty() || digest != contentDigest()) return;
+  emit contentPresented(digest);
+  // Start exposure only after this page's decoded pixels reached a rendered frame.
+  if (autoplay() && timed_page_ != pageKey()) {
+    timed_page_ = pageKey();
+    exposure_timer_.start(exposureSeconds() * 1000);
+  }
+}
+
+void ClientModel::reveal() { if (client_.dispatch(elo::Reveal{})) emit changed(); }
+
+QByteArray ClientModel::pageKey() const {
+  return contentDigest() + ':' + QByteArray::number(pageNumber()) + ':' + presentationDigest();
+}
+void ClientModel::advanceAutomatically() {
+  if (!autoplay() || !client_.usable()) return;
+  timed_page_.clear();
+  exposure_cycle_ = (exposure_cycle_ + 1) % 1000000;
+  if (client_.can_next()) next();
+  else {
+    // End of loop is the unattended session boundary for validated updates.
+    client_.reset();
+    emit changed();
+  }
 }

@@ -120,6 +120,31 @@ int main() {
   updates.result.fixture = original;
   check(live.reset() && live.fixture() == original, "explicit reactivation of prior publication supported");
   live.dispatch(elo::PresentationReady{true});
+  Catalog reveal_catalog;
+  reveal_catalog.result.fixture.version = "3";
+  reveal_catalog.result.fixture.pages[0].interaction = "reveal";
+  const auto secret = reveal_catalog.result.fixture.pages[0].body;
+  elo::Client reveal(&reveal_catalog);
+  reveal.start();
+  check(!reveal.dispatch(elo::Reveal{}), "reveal waits for presentation readiness");
+  reveal.dispatch(elo::PresentationReady{true});
+  check(reveal.can_reveal() && reveal.page().body != secret, "reveal initially conceals body");
+  check(reveal.fixture().pages[0].body == secret, "concealment preserves publication");
+  check(reveal.dispatch(elo::Reveal{}) && reveal.page().body == secret, "explicit reveal exposes body");
+  check(!reveal.dispatch(elo::Reveal{}), "repeat reveal is idempotent");
+  reveal.next(); reveal.previous();
+  check(reveal.page().body == secret, "navigation preserves revealed state");
+  reveal.dispatch(elo::NetworkChanged{true}); reveal.dispatch(elo::NetworkChanged{false});
+  check(reveal.page().body == secret, "offline transition preserves reveal");
+  check(reveal.reset() && reveal.can_reveal() && reveal.page().body != secret,
+        "reset on first page conceals again");
+  elo::Client fresh_reveal(&reveal_catalog);
+  fresh_reveal.start(); fresh_reveal.dispatch(elo::PresentationReady{true});
+  check(fresh_reveal.can_reveal(), "new process has no saved reveal state");
+  reveal_catalog.result.fixture.version = "2";
+  elo::Client incompatible_reveal(&reveal_catalog);
+  incompatible_reveal.start();
+  check(incompatible_reveal.state() == elo::State::error_recoverable, "old format rejects reveal");
   struct FakeClock : elo::Clock {
     std::uint64_t tick = 0;
     std::uint64_t now_ms() const override { return tick; }

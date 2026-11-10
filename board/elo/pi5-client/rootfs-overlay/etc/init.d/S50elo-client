@@ -1,0 +1,35 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-only
+# Configured Pi terminals start without input devices. Unconfigured bench keeps console.
+set -u
+runtime=/run/elo-client
+pidfile=$runtime/supervisor.pid
+case "${1:-}" in
+  start)
+    [ -s /etc/elo-terminal/server.url ] || exit 0
+    if [ -s "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then exit 0; fi
+    mkdir -p "$runtime" || exit 1
+    chmod 700 "$runtime" || exit 1
+    export ELO_RUNTIME_DIR=$runtime
+    start-stop-daemon -S -b -p "$pidfile" -O "$runtime/client.log" \
+      -x /usr/bin/elo-client-supervisor -- /usr/bin/elo-client-start || exit 1
+    for attempt in 1 2 3 4 5; do
+      if [ -s "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then exit 0; fi
+      sleep 1
+    done
+    echo 'Supervisor ELO não iniciou' >&2
+    exit 1
+    ;;
+  stop)
+    [ -s "$pidfile" ] || exit 0
+    start-stop-daemon -K -p "$pidfile" || exit 1
+    for attempt in 1 2 3 4 5; do
+      [ -e "$pidfile" ] || exit 0
+      sleep 1
+    done
+    echo 'Supervisor ELO não parou' >&2
+    exit 1
+    ;;
+  restart) "$0" stop && "$0" start ;;
+  *) echo "Usage: $0 {start|stop|restart}" >&2; exit 2 ;;
+esac

@@ -93,3 +93,27 @@ Cortex-A53 não é suficiente. O kernel é genérico: o teste não inicializa fi
 GPU, rádio nem kernel físico do Pi 5. Não executar durante build da imagem.
 
 Build e raiz virtual passaram em 2026-11-09; consulte [evidência da imagem](../evidence/P2-PI5-CLIENT-BUILT-20261109.md). Validação física do cliente e Wi-Fi permanece pendente.
+
+Inicialização automática e Wi-Fi pré-configurado agora são preparados pelo
+[provisionamento do terminal](../client/terminal-provisioning.md). Roteiro manual
+acima continua disponível para diagnóstico de bancada sem configuração.
+
+Ensaio de boot automático do rootfs, sem NIC, mouse ou teclado virtuais:
+
+```bash
+toolbox run -c elo-os bash -lc 'export PATH="$PWD/output/pi5-client/host/sbin:$PATH"; python3 tests/client/pi5-autostart-smoke.py'
+```
+
+Requer imagem atualizada, kernel ARM64 genérico citado acima e projeção JPEG de teste
+em `build/elo-image-content` (ou `ELO_IMAGE_CONTENT_DIR`). Usa cópia descartável e
+credenciais fictícias. Não altera imagem original nem configuração operacional.
+
+Ensaio de manutenção com chave SSH efêmera e serviços NTP/HTTPS isolados:
+
+```bash
+toolbox run -c elo-os bash -lc 'export PATH="$PWD/output/pi5-client/host/sbin:$PATH"; ELO_MAINTENANCE_TEST=1 python3 tests/client/pi5-autostart-smoke.py'
+```
+
+Testa relógio inicial atrasado, SSH por chave, recusa de chave desconhecida, HTTPS
+validado, relatório de página e manutenção acessível após parar apresentação.
+Não altera relógio do host nem usa credenciais operacionais.

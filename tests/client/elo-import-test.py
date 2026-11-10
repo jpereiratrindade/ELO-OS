@@ -137,6 +137,22 @@ class ImportTest(unittest.TestCase):
         image['sha256'] = '0' * 64
         with self.assertRaises(ValueError): content.fixture(content.encoded(value))
 
+    def test_reveal_projection_and_explicit_format(self):
+        self.variant['interaction'] = 'reveal'
+        self.write('catalog/variants/text.json', content.encoded(self.variant))
+        self.seal()
+        data, _ = importer.project(self.source, ['text-1'])
+        value = content.fixture(data)
+        self.assertEqual(value['version'], '3')
+        self.assertEqual(value['pages'][0]['interaction'], 'reveal')
+        self.assertEqual(value['pages'][0]['body'], self.variant['presentation']['text'])
+        for version in ('1', '2'):
+            value['version'] = version
+            with self.assertRaises(ValueError): content.fixture(content.encoded(value))
+        value['version'] = '3'
+        value['pages'][0]['interaction'] = 'choose'
+        with self.assertRaises(ValueError): content.fixture(content.encoded(value))
+
     def test_client_bounds_rejected_before_activation(self):
         self.variant['presentation']['text'] = 'x' * 4097
         self.write('catalog/variants/text.json', content.encoded(self.variant))

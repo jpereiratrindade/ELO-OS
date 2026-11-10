@@ -116,13 +116,15 @@ def project_snapshot(manifest, files, variant_ids):
         if atom.get('schema_version', '0.1') not in ('0.1', '0.2'):
             raise ValueError(f'Unsupported atom schema: {atom_id}')
         presentation = object_value(variant.get('presentation'), key)
-        if (variant.get('interaction', 'none') != 'none'
+        if (variant.get('interaction', 'none') not in ('none', 'reveal')
                 or presentation.get('options', []) != []
                 or presentation.get('correct_option', '') != ''):
-            raise ValueError(f'Unsupported capability in variant: {key}; text/none only')
+            raise ValueError(f'Unsupported capability in variant: {key}; none/reveal only')
         # Never silently replace an interactive or media variant with its summary.
         page = {'title': required_text(presentation.get('title'), key),
                 'body': required_text(presentation.get('text'), key)}
+        if variant.get('interaction') == 'reveal':
+            page['interaction'] = 'reveal'
         media = presentation.get('media', [])
         if not isinstance(media, list) or len(media) > 1:
             raise ValueError('At most one image per page is supported')
@@ -144,7 +146,7 @@ def project_snapshot(manifest, files, variant_ids):
     bundle_id = required_text(manifest.get('bundle_id'), 'bundle_id')
     version = required_text(manifest.get('version'), 'version')
     title = required_text(manifest.get('title'), 'title')
-    output = {'schema': 1, 'id': bundle_id, 'version': '2' if any('image' in page for page in pages) else '1',
+    output = {'schema': 1, 'id': bundle_id, 'version': '3' if any(page.get('interaction') == 'reveal' for page in pages) else ('2' if any('image' in page for page in pages) else '1'),
               'name': f'{title} · ELO {version}', 'pages': pages}
     data = encoded(output)
     fixture(data)  # Enforce exact client text/page/byte limits before any write.

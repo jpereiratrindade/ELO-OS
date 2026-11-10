@@ -2,6 +2,7 @@
 #include "client.hpp"
 #include "ports.hpp"
 #include <utility>
+#include <algorithm>
 
 namespace elo {
 Fixture local_fixture() {
@@ -13,14 +14,18 @@ Fixture local_fixture() {
 }
 namespace {
 bool valid(const Fixture& fixture) {
-  if (fixture.id.empty() || fixture.name.empty() || (fixture.version != "1" && fixture.version != "2") ||
+  if (fixture.id.empty() || fixture.name.empty() || (fixture.version != "1" && fixture.version != "2" && fixture.version != "3" && fixture.version != "4") ||
       fixture.pages.empty() || fixture.pages.size() > 32 || fixture.id.size() > 128 || fixture.name.size() > 256)
     return false;
+  if ((fixture.version == "4" && (fixture.exposure_seconds < 5 || fixture.exposure_seconds > 3600))
+      || (fixture.version != "4" && fixture.exposure_seconds != 0)) return false;
   if (fixture.id.find('\0') != std::string::npos || fixture.name.find('\0') != std::string::npos) return false;
   for (const auto& page : fixture.pages) {
+    if ((page.interaction != "none" && page.interaction != "reveal")
+        || (page.interaction == "reveal" && fixture.version != "3" && fixture.version != "4")) return false;
     if (page.title.empty() || page.title.size() > 256 || page.body.empty() || page.body.size() > 4096)
       return false;
-    else if ((!page.image_source.empty() && (fixture.version != "2" || page.image_source.size() > 2800000
+    else if ((!page.image_source.empty() && ((fixture.version != "2" && fixture.version != "3" && fixture.version != "4") || page.image_source.size() > 2800000
              || (!page.image_source.starts_with("data:image/png;base64,") && !page.image_source.starts_with("data:image/jpeg;base64,"))
              || page.image_alt.empty() || page.image_alt.size() > 512 || page.image_hash.size() != 64))) return false;
     else if (page.title.find('\0') != std::string::npos || page.body.find('\0') != std::string::npos) return false;
@@ -49,6 +54,7 @@ bool Client::handle(Start) {
   }
   fixture_ = std::move(result.fixture);
   loaded_ = true;
+  revealed_.assign(fixture_.pages.size(), false);
   // Remain BOOTING until the presentation adapter acknowledges a rendered frame.
   return true;
 }
@@ -88,6 +94,11 @@ bool Client::handle(CheckContent) {
   }
   return previous != content_update_;
 }
+bool Client::handle(Reveal) {
+  if (!can_reveal()) return false;
+  revealed_[index_] = true;
+  return true;
+}
 bool Client::handle(Reset) {
   if (!usable()) return false;
   // Revalidate the current pointer at the session boundary, including revocation
@@ -95,6 +106,7 @@ bool Client::handle(Reset) {
   const bool changed = handle(CheckContent{});
   if (pending_) {
     fixture_ = std::move(*pending_);
+    revealed_.assign(fixture_.pages.size(), false);
     pending_.reset();
     content_update_ = ContentUpdate::none;
     index_ = 0;
@@ -102,7 +114,9 @@ bool Client::handle(Reset) {
     state_ = State::booting;
     return true;
   }
-  if (index_ == 0) return changed;
+  const bool interacted = std::any_of(revealed_.begin(), revealed_.end(), [](bool value) { return value; });
+  revealed_.assign(fixture_.pages.size(), false);
+  if (index_ == 0) return changed || interacted;
   index_ = 0;
   return true;
 }
@@ -141,6 +155,12 @@ std::string_view state_name(State state) {
 }
 Page Client::page() const {
   if (!error_.empty()) return {"Apresentação indisponível", error_};
-  return loaded_ ? fixture_.pages[index_] : Page{"Iniciando", "Preparando a fixture local de teste."};
+  if (!loaded_) return {"Iniciando", "Preparando a fixture local de teste."};
+  auto page = fixture_.pages[index_];
+  if (page.interaction == "reveal" && !fixture_.exposure_seconds && !revealed_[index_]) {
+    page.body = "Toque em Revelar para descobrir.";
+    page.image_source.clear(); page.image_alt.clear(); page.image_hash.clear();
+  }
+  return page;
 }
 }

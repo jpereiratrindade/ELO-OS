@@ -6,6 +6,7 @@
 #include <QTimer>
 #include <QSslConfiguration>
 #include <QUrl>
+#include <QJsonObject>
 
 class ContentSync final : public QObject {
  public:
@@ -38,6 +39,7 @@ class ContentSync final : public QObject {
   QNetworkReply* report_reply_ = nullptr;
   QByteArray received_;
   QByteArray presented_;
+  QJsonObject display_;
   QString session_;
   quint64 report_sequence_ = 0;
   int report_retry_ms_ = 5000;

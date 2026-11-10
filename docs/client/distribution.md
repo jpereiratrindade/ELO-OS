@@ -1,5 +1,7 @@
 # Servidor de distribuição e cliente conectado
 
+Acompanhamento atual por identidade e página: [Totens no servidor](terminal-monitoring.md).
+
 Implementação experimental de distribuição textual, protocolo 1. Confirmação de recebimento e apresentação
 está no [contrato de relatórios](delivery-receipts.md). O serviço lê
 bundles publicados pelo ELO e gera a projeção textual já suportada pelo terminal.

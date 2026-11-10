@@ -1,5 +1,7 @@
 # Confirmação de recebimento e apresentação
 
+Acompanhamento atual por identidade e página: [Totens no servidor](terminal-monitoring.md).
+
 Cliente atualizado envia estado autenticado para `POST /v1/receipt`, separado de
 requisição de download. Painel consulta `/manage/delivery` a cada cinco segundos,
 sem reconstruir formulário nem apagar uma seleção em edição.

@@ -13,6 +13,8 @@
 #include <QSaveFile>
 #include <QSslCertificate>
 #include <QSslSocket>
+#include <QSslError>
+#include <QDebug>
 #include <QTemporaryDir>
 #include <QStorageInfo>
 #include <QUuid>
@@ -118,8 +120,12 @@ ContentSync::ContentSync(ClientModel& model, QString root, QUrl endpoint, QStrin
   QObject::connect(&report_deadline_, &QTimer::timeout, this, [this] { if (report_reply_) report_reply_->abort(); });
   QObject::connect(&model_, &ClientModel::contentPresented, this, [this](const QByteArray& digest) {
     if (received_.isEmpty()) received_ = digest;  // Validated cache loaded at startup.
-    if (presented_ == digest) return;
+    const QJsonObject display{{"publication", model_.publicationName().simplified()},
+        {"title", model_.title().simplified()}, {"page", model_.pageNumber()}, {"pages", model_.pageCount()},
+        {"mode", model_.autoplay() ? "automatic" : "manual"}, {"exposure_seconds", model_.exposureSeconds()}};
+    if (presented_ == digest && display_ == display) return;
     presented_ = digest;
+    display_ = display;
     scheduleReport();
   });
   manager_.setProxy(QNetworkProxy::NoProxy);
@@ -152,13 +158,13 @@ QString ContentSync::configure() {
 void ContentSync::start() { timer_.start(0); }
 void ContentSync::fetch() {
   const auto token = credential(token_file_);
-  if (token.isEmpty()) { fail(); return; }
+  if (token.isEmpty()) { qWarning() << "elo-client credential_unavailable"; fail(); return; }
   model_.setServerStatus(insecure_ ? "Servidor local de teste · consultando publicação"
                                   : "Servidor ELO · consultando publicação");
   QNetworkRequest request(endpoint_);
   request.setRawHeader("Authorization", "Bearer " + token);
   request.setRawHeader("Accept", "application/json");
-  request.setRawHeader("X-ELO-Capabilities", "text-v1,image-v2");
+  request.setRawHeader("X-ELO-Capabilities", "text-v1,image-v2,reveal-v3,autoplay-v4");
   request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
   request.setAttribute(QNetworkRequest::CacheLoadControlAttribute, QNetworkRequest::AlwaysNetwork);
   request.setSslConfiguration(tls_);
@@ -171,6 +177,9 @@ void ContentSync::fetch() {
     if (response_.size() > limit) reply_->abort();
   });
   QObject::connect(reply_, &QNetworkReply::finished, this, [this] { finish(); });
+  QObject::connect(reply_, &QNetworkReply::sslErrors, this, [](const QList<QSslError>& errors) {
+    for (const auto& error : errors) qWarning().noquote() << "elo-client TLS:" << error.errorString();
+  });
   deadline_.start(15000);
 }
 void ContentSync::fail() {
@@ -186,6 +195,8 @@ void ContentSync::finish() {
   response_ += reply->read(limit + 1 - response_.size());
   if (reply->error() != QNetworkReply::NoError || reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() != 200
       || response_.size() > limit || !reply->header(QNetworkRequest::ContentTypeHeader).toString().startsWith("application/json")) {
+    qWarning() << "elo-client fetch_failed network=" << int(reply->error())
+               << "http=" << reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     fail(); return;
   }
   const auto object = QJsonDocument::fromJson(response_).object();
@@ -231,10 +242,12 @@ void ContentSync::report() {
   request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
   request.setSslConfiguration(tls_);
   request.setTransferTimeout(10000);
-  const auto payload = QJsonDocument(QJsonObject{{"schema", 1}, {"session", session_},
+  QJsonObject report{{"schema", display_.isEmpty() ? 1 : 2}, {"session", session_},
       {"sequence", static_cast<qint64>(++report_sequence_)},
       {"received_sha256", QString::fromLatin1(received_)},
-      {"presented_sha256", QString::fromLatin1(presented_)}}).toJson(QJsonDocument::Compact);
+      {"presented_sha256", QString::fromLatin1(presented_)}};
+  if (!display_.isEmpty()) report.insert("display", display_);
+  const auto payload = QJsonDocument(report).toJson(QJsonDocument::Compact);
   report_dirty_ = false;
   report_reply_ = manager_.post(request, payload);
   report_reply_->setReadBufferSize(4097);
@@ -253,6 +266,8 @@ void ContentSync::report() {
       report_retry_ms_ = 5000;
       report_timer_.start(report_dirty_ ? 50 : 30000);
     } else {
+      qWarning() << "elo-client report_failed network=" << int(reply->error())
+                 << "http=" << reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
       report_timer_.start(report_retry_ms_);
       report_retry_ms_ = std::min(report_retry_ms_ * 2, 60000);
     }

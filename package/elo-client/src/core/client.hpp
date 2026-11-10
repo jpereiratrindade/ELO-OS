@@ -18,6 +18,7 @@ struct Page {
   std::string image_source;
   std::string image_alt;
   std::string image_hash;
+  std::string interaction = "none";
   bool operator==(const Page&) const = default;
 };
 struct Fixture {
@@ -26,6 +27,7 @@ struct Fixture {
   std::string version;
   std::vector<Page> pages;
   std::string content_hash;  // Exact validated local payload bytes; empty for built-in content.
+  int exposure_seconds = 0;
   bool operator==(const Fixture&) const = default;
 };
 enum class LoadStatus { loaded, missing, invalid, timeout, fatal };
@@ -40,11 +42,12 @@ struct Next {};
 struct Previous {};
 struct Reset {};
 struct CheckContent {};
+struct Reveal {};
 enum class ContentUpdate { none, available, rejected };
 struct PresentationReady { bool success; };
 struct NetworkChanged { bool available; };
 struct Retry {};
-using Event = std::variant<Start, Next, Previous, Reset, PresentationReady, NetworkChanged, Retry, CheckContent>;
+using Event = std::variant<Start, Next, Previous, Reset, PresentationReady, NetworkChanged, Retry, CheckContent, Reveal>;
 // The core performs no I/O. A loaded fixture and an actual presentation acknowledgement
 // are both required for READY_LOCAL. Link availability never establishes ONLINE.
 class Client {
@@ -61,9 +64,11 @@ class Client {
   std::string_view error() const { return error_; }
   Page page() const;
   const Fixture& fixture() const { return fixture_; }
+  bool pending_autoplay() const { return pending_ && pending_->exposure_seconds > 0; }
   ContentUpdate content_update() const { return content_update_; }
   std::size_t index() const { return index_; }
   std::size_t page_count() const { return fixture_.pages.size(); }
+  bool can_reveal() const { return usable() && !fixture_.exposure_seconds && fixture_.pages[index_].interaction == "reveal" && !revealed_[index_]; }
   bool usable() const { return state_ == State::ready_local || state_ == State::degraded_offline; }
   bool can_next() const { return usable() && index_ + 1 < page_count(); }
   bool can_previous() const { return usable() && index_ > 0; }
@@ -73,6 +78,7 @@ class Client {
   bool handle(Previous);
   bool handle(Reset);
   bool handle(CheckContent);
+  bool handle(Reveal);
   bool handle(PresentationReady event);
   bool handle(NetworkChanged event);
   bool handle(Retry);
@@ -82,6 +88,7 @@ class Client {
   Fixture fixture_;
   std::string error_;
   std::size_t index_ = 0;
+  std::vector<bool> revealed_;
   std::optional<Fixture> pending_;
   ContentUpdate content_update_ = ContentUpdate::none;
   bool loaded_ = false;

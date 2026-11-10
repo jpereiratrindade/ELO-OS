@@ -1,0 +1,24 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-only
+# SSH is provisioned by public key, independently of the presentation supervisor.
+set -u
+case "${1:-}" in
+  start)
+    [ -s /root/.ssh/authorized_keys ] || { echo 'SSH: aguardando chave pública de manutenção'; exit 0; }
+    if [ -s /run/dropbear.pid ] && kill -0 "$(cat /run/dropbear.pid)" 2>/dev/null; then exit 0; fi
+    if [ -L /etc/dropbear ]; then
+      [ "$(readlink /etc/dropbear)" = /var/run/dropbear ] || exit 1
+      rm /etc/dropbear || exit 1
+    fi
+    mkdir -p /etc/dropbear || exit 1
+    chmod 700 /etc/dropbear /root/.ssh || exit 1
+    chmod 600 /root/.ssh/authorized_keys || exit 1
+    /usr/sbin/dropbear -s -R -P /run/dropbear.pid
+    ;;
+  stop)
+    [ -s /run/dropbear.pid ] || exit 0
+    start-stop-daemon -K -p /run/dropbear.pid
+    ;;
+  restart) "$0" stop && "$0" start ;;
+  *) echo "Usage: $0 {start|stop|restart}" >&2; exit 2 ;;
+esac

@@ -15,6 +15,11 @@ Window {
     title: "ELO — experiências"
     property bool contentReady: !pageImage.visible || pageImage.status === Image.Ready
 
+    Connections {
+        target: window
+        function onContentReadyChanged() { Qt.callLater(experience.scheduleScroll) }
+    }
+
     component LocalButton: Rectangle {
         property string label
         property bool primary: false
@@ -79,13 +84,29 @@ Window {
         }
         Flickable {
             id: experience
-            property string currentPage: clientModel.pageNumber + "|" + clientModel.title + "|" + clientModel.body
-            onCurrentPageChanged: contentY = 0
+            objectName: "experienceScroll"
+            property string currentPage: clientModel.exposureCycle + "|" + clientModel.pageNumber + "|" + clientModel.title + "|" + clientModel.body
+            onCurrentPageChanged: Qt.callLater(scheduleScroll)
             anchors.fill: contentCard
             anchors.margins: 24
             clip: true
             contentWidth: width
             contentHeight: contentColumn.implicitHeight
+            function scheduleScroll() {
+                autoScroll.stop()
+                contentY = 0
+                if (clientModel.autoplay && window.contentReady && contentHeight > height)
+                    autoScroll.start()
+            }
+            onContentHeightChanged: Qt.callLater(scheduleScroll)
+            NumberAnimation {
+                id: autoScroll
+                target: experience
+                property: "contentY"
+                from: 0
+                to: Math.max(0, experience.contentHeight - experience.height)
+                duration: Math.max(1000, (clientModel.exposureSeconds - 1) * 1000)
+            }
             boundsBehavior: Flickable.StopAtBounds
         Column {
             id: contentColumn
@@ -143,6 +164,14 @@ Window {
                         font.pixelSize: window.width < 800 ? 19 : 21
                         lineHeight: 1.3
                     }
+                    LocalButton {
+                        objectName: "revealButton"
+                        label: "Revelar"
+                        primary: true
+                        visible: clientModel.canReveal
+                        enabled: clientModel.canReveal
+                        onActivated: clientModel.reveal()
+                    }
                 }
             }
         }
@@ -166,6 +195,7 @@ Window {
         }
         Row {
             id: actions
+            visible: !clientModel.autoplay
             anchors.left: parent.left
             anchors.bottom: footer.top
             anchors.bottomMargin: 24
@@ -186,7 +216,7 @@ Window {
             textFormat: Text.PlainText
             anchors.left: parent.left
             anchors.bottom: parent.bottom
-            text: clientModel.state + " · " + clientModel.fixtureLabel + "\n" + clientModel.connectivity + (clientModel.contentUpdate.length > 0 ? "\n" + clientModel.contentUpdate : "") + "\nNo seu tempo. Sem conexão necessária."
+            text: clientModel.autoplay ? "ELO · " + clientModel.pageNumber + " / " + clientModel.pageCount + " · " + clientModel.exposureSeconds + " s" : clientModel.state + " · " + clientModel.fixtureLabel + "\n" + clientModel.connectivity + (clientModel.contentUpdate.length > 0 ? "\n" + clientModel.contentUpdate : "") + "\nNo seu tempo. Sem conexão necessária."
             color: Theme.muted
             font.family: window.uiFont
             font.pixelSize: 15

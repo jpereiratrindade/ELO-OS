@@ -187,6 +187,50 @@ class DistributionTest(unittest.TestCase):
         digest = json.loads(active.read_text())['bundle']
         self.wait(lambda: receipt.record['received_sha256'] == digest and receipt.record['presented_sha256'] == digest)
         self.assertEqual(receipt.status(digest)['state'], 'presented')
+        self.assertEqual(receipt.record['schema'], 2)
+        self.assertEqual(receipt.record['display']['title'], 'Do servidor ELO')
+        self.assertEqual(receipt.record['display']['page'], 1)
+
+    def test_two_native_terminals_report_separate_presentations(self):
+        from elo_panel import Panel
+        panel = Panel(self.bundle, ['text'], b'a' * 43, self.base / 'state/selection.json', ROOT / 'web/distribution')
+        first = panel.terminals.add({'name': 'Totem A'})
+        second = panel.terminals.add({'name': 'Totem B'})
+        port = self.listen(elo_server.server(self.bundle, ['text'], self.token, panel=panel), tls=True)
+        for index, entry in enumerate((first, second)):
+            self.token_file = self.base / f'terminal-{index}.token'
+            self.token_file.write_text(entry['token']); self.token_file.chmod(0o600)
+            self.cache = self.base / f'cache-{index}'
+            self.launch(port, tls=True)
+        one = panel.terminals.receipt(first['id'])
+        two = panel.terminals.receipt(second['id'])
+        self.wait(lambda: one.record and two.record and one.record.get('display') and two.record.get('display'))
+        self.assertNotEqual(one.record['session'], two.record['session'])
+        self.assertEqual(one.record['display']['title'], 'Do servidor ELO')
+        self.assertEqual(two.record['display']['title'], 'Do servidor ELO')
+        self.assertIsNone(panel.receipts.record)
+
+    def test_automatic_page_change_updates_confirmed_display(self):
+        from elo_panel import Panel
+        path = self.bundle / 'catalog/variants/text.json'
+        first = json.loads(path.read_text())
+        second = first | {'variant_id': 'text-2', 'presentation': {'title': 'Segunda página real', 'text': 'Exposição automática.'}}
+        path.write_bytes(content.encoded([first, second]))
+        digest = hashlib.sha256()
+        for path in sorted(self.bundle.rglob('*')):
+            if path.is_file() and path.name != 'manifest.json':
+                digest.update(path.relative_to(self.bundle).as_posix().encode()); digest.update(path.read_bytes())
+        path = self.bundle / 'manifest.json'; manifest = json.loads(path.read_text())
+        manifest['content_hash'] = 'sha256:' + digest.hexdigest(); path.write_bytes(content.encoded(manifest))
+        panel = Panel(self.bundle, ['text'], b'a' * 43, self.base / 'state/selection.json', ROOT / 'web/distribution')
+        panel.select({'variants': ['text', 'text-2'], 'expected_hash': manifest['content_hash'], 'exposure_seconds': 5})
+        port = self.listen(elo_server.server(self.bundle, ['text'], self.token, panel=panel), tls=True)
+        self.launch(port, tls=True)
+        self.wait(lambda: panel.receipts.record and panel.receipts.record.get('display', {}).get('page') == 1)
+        publication = panel.receipts.record['presented_sha256']
+        self.wait(lambda: panel.receipts.record.get('display', {}).get('page') == 2)
+        self.assertEqual(panel.receipts.record['display']['title'], 'Segunda página real')
+        self.assertEqual(panel.receipts.record['presented_sha256'], publication)
 
     def test_downloaded_update_does_not_claim_presentation(self):
         self.seeded_cache()
@@ -233,6 +277,58 @@ class DistributionTest(unittest.TestCase):
         self.wait(lambda: len(self.frame(health)) == 8 and self.frame(health)[7] == previous_frame)
         self.assertIn(self.frame(health)[5], ('READY_LOCAL', 'DEGRADED_OFFLINE'))
 
+    def test_reveal_capability_and_concealed_offline_restart(self):
+        path = self.bundle / 'catalog/variants/text.json'
+        variant = json.loads(path.read_text()); variant['interaction'] = 'reveal'
+        path.write_bytes(content.encoded(variant))
+        digest = hashlib.sha256()
+        for path in sorted(self.bundle.rglob('*')):
+            if path.is_file() and path.name != 'manifest.json':
+                digest.update(path.relative_to(self.bundle).as_posix().encode()); digest.update(path.read_bytes())
+        path = self.bundle / 'manifest.json'; manifest = json.loads(path.read_text())
+        manifest['content_hash'] = 'sha256:' + digest.hexdigest(); path.write_bytes(content.encoded(manifest))
+        port = self.actual_server(tls=True)
+        connection = http.client.HTTPSConnection('localhost', port, context=ssl.create_default_context(cafile=str(self.cert)))
+        connection.request('GET', '/v1/presentation', headers={'Authorization': 'Bearer ' + self.token.decode(),
+            'X-ELO-Capabilities': 'text-v1,image-v2'})
+        response = connection.getresponse(); self.assertEqual(response.status, 409); response.read(); connection.close()
+        child, health, log = self.launch(port, tls=True)
+        receipt = self.services[-1].receipts
+        self.wait(lambda: receipt.record and receipt.record['presented_sha256'])
+        active = content.read_active(self.cache)
+        self.assertEqual(active['version'], '3')
+        self.assertEqual(active['pages'][0]['interaction'], 'reveal')
+        parts = [active['id'], '3', active['pages'][0]['title'], 'Toque em Revelar para descobrir.']
+        expected = hashlib.sha256(b''.join(x.encode() + b'\0' for x in parts)).hexdigest()
+        self.wait(lambda: len(self.frame(health)) == 8 and self.frame(health)[7] == expected)
+        child.terminate(); child.wait(timeout=5)
+        service = self.services.pop(); service.shutdown(); service.server_close()
+        child, health, log = self.launch(port, tls=True)
+        self.wait(lambda: len(self.frame(health)) == 8 and self.frame(health)[7] == expected)
+
+    def test_automatic_playback_enters_without_mouse_and_loops_offline(self):
+        from elo_panel import Panel
+        panel = Panel(self.bundle, ['text'], b'a' * 43, self.base / 'selection.json', ROOT / 'web/distribution')
+        manifest = json.loads((self.bundle / 'manifest.json').read_text())
+        panel.select({'variants': ['text'], 'expected_hash': manifest['content_hash'], 'exposure_seconds': 5})
+        port = self.listen(elo_server.server(self.bundle, ['text'], self.token, panel=panel), tls=True)
+        connection = http.client.HTTPSConnection('localhost', port, context=ssl.create_default_context(cafile=str(self.cert)))
+        connection.request('GET', '/v1/presentation', headers={'Authorization': 'Bearer ' + self.token.decode(),
+            'X-ELO-Capabilities': 'text-v1,image-v2,reveal-v3'})
+        response = connection.getresponse(); self.assertEqual(response.status, 409); response.read(); connection.close()
+        self.seeded_cache() # Existing manual session must switch without a local reset.
+        child, health, log = self.launch(port, tls=True)
+        self.wait(lambda: 'fixture=test-application' in log.read_text())
+        self.assertEqual(content.read_active(self.cache)['exposure_seconds'], 5)
+        service = self.services.pop(); service.shutdown(); service.server_close()
+        # Single-page sequence stays healthy through multiple unattended cycles offline.
+        self.wait(lambda: len(self.frame(health)) == 8)
+        sequence = int(self.frame(health)[4])
+        time.sleep(6)
+        self.assertIsNone(child.poll())
+        self.assertGreater(int(self.frame(health)[4]), sequence)
+        self.assertEqual(self.frame(health)[6], '1')
+
     def test_invalid_image_bytes_preserve_previous_cache(self):
         previous = self.seeded_cache()
         raw = b'\x89PNG\r\n\x1a\ninvalid'
@@ -247,6 +343,26 @@ class DistributionTest(unittest.TestCase):
         child, health, log = self.launch(port)
         self.wait(lambda: 'Servidor indisponível' in log.read_text())
         self.assertEqual((self.cache / 'active.json').read_bytes(), previous)
+
+    def test_headless_https_probe_reports_failure_without_credential_leak(self):
+        probe = CLIENT.parent / 'elo-network-probe'
+        self.assertTrue(probe.is_file())
+        port = self.actual_server(tls=True)
+        args = [str(probe), '--server', f'https://localhost:{port}/v1/presentation',
+                '--token-file', str(self.token_file), '--ca-file', str(self.cert)]
+        result = subprocess.run(args, capture_output=True, text=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('HTTP: 200', result.stdout)
+        self.assertNotIn(self.token.decode(), result.stdout + result.stderr)
+        self.token_file.write_text('x' * 43)
+        result = subprocess.run(args, capture_output=True, text=True, timeout=20)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('HTTP: 401', result.stdout)
+        self.assertNotIn('x' * 43, result.stdout + result.stderr)
+        args[2] = f'https://127.0.0.1:{port}/v1/presentation'
+        result = subprocess.run(args, capture_output=True, text=True, timeout=20)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('TLS:', result.stdout)
 
     def test_https_with_explicit_trust(self):
         port = self.actual_server(tls=True)

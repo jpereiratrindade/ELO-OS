@@ -32,9 +32,11 @@ done
 for file in "$ROOT"/scripts/*.sh "$ROOT"/board/elo/pi5/*.sh; do
   bash -n "$file"
 done
+sh -n "$ROOT/package/elo-client/src/terminal.sh"
 sh -n "$ROOT/board/elo/qemu-gui/rootfs-overlay/etc/init.d/S50elo-client"
 sh -n "$ROOT/board/elo/qemu-gui/rootfs-overlay/usr/bin/elo-client-supervisor"
 bash -n "$ROOT/board/elo/appliance/post-build.sh"
+bash -n "$ROOT/board/elo/pi5-client/post-build.sh"
 for file in "$ROOT"/board/elo/appliance/rootfs-overlay/etc/init.d/*; do sh -n "$file"; done
 python3 - "$ROOT" <<'PY'
 from pathlib import Path
@@ -73,3 +75,5 @@ PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/tests/recovery/data-image-test.py"
 PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/tests/network/pi5-tools-test.py"
 
 PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/tests/network/panel-test.py"
+
+PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/tests/client/terminal-setup-test.py"

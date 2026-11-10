@@ -1,1 +1,1 @@
-root=/dev/mmcblk0p2 rootwait console=tty1 console=ttyAMA10,115200 module_blacklist=vc4
+root=/dev/mmcblk0p2 rootwait console=tty1 console=ttyAMA10,115200 module_blacklist=vc4 consoleblank=0

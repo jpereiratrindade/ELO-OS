@@ -64,21 +64,34 @@ elo::LoadResult JsonCatalog::load() {
   const auto stored = store_.read_active();
   if (stored.status != elo::LoadStatus::loaded) return {stored.status, {}};
   const auto json = QJsonDocument::fromJson(QByteArray::fromStdString(stored.utf8)).object();
-  if (!keys(json, {"schema", "id", "name", "version", "pages"}) || json["schema"].toDouble(-1) != 1
+  if ((!keys(json, {"schema", "id", "name", "version", "pages"})
+       && !keys(json, {"schema", "id", "name", "version", "pages", "exposure_seconds"})) || json["schema"].toDouble(-1) != 1
       || !json["id"].isString() || !json["name"].isString() || !json["version"].isString()
       || !json["pages"].isArray()) return {elo::LoadStatus::invalid, {}};
   elo::Fixture fixture{json["id"].toString().toStdString(), json["name"].toString().toStdString(),
                        json["version"].toString().toStdString(), {}};
+  if (json.contains("exposure_seconds")) {
+    const auto seconds = json["exposure_seconds"].toDouble(-1);
+    if (fixture.version != "4" || seconds < 5 || seconds > 3600 || seconds != static_cast<int>(seconds))
+      return {elo::LoadStatus::invalid, {}};
+    fixture.exposure_seconds = static_cast<int>(seconds);
+  }
   const auto pages = json["pages"].toArray();
   if (pages.isEmpty() || pages.size() > 32) return {elo::LoadStatus::invalid, {}};
   for (const auto& value : pages) {
     const auto page = value.toObject();
-    if ((!keys(page, {"title", "body"}) && !keys(page, {"title", "body", "image"})) || !page["title"].isString() || !page["body"].isString())
+    if ((!keys(page, {"title", "body"}) && !keys(page, {"title", "body", "image"})
+        && !keys(page, {"title", "body", "interaction"}) && !keys(page, {"title", "body", "image", "interaction"})) || !page["title"].isString() || !page["body"].isString())
       return {elo::LoadStatus::invalid, {}};
     fixture.pages.push_back({page["title"].toString().toStdString(), page["body"].toString().toStdString()});
+    if (page.contains("interaction")) {
+      if ((fixture.version != "3" && fixture.version != "4") || !page["interaction"].isString()
+          || (page["interaction"] != "none" && page["interaction"] != "reveal")) return {elo::LoadStatus::invalid, {}};
+      fixture.pages.back().interaction = page["interaction"].toString().toStdString();
+    }
     if (page.contains("image")) {
       const auto image = page["image"].toObject();
-      if (fixture.version != "2" || !keys(image, {"mime", "sha256", "base64", "alt"})
+      if ((fixture.version != "2" && fixture.version != "3" && fixture.version != "4") || !keys(image, {"mime", "sha256", "base64", "alt"})
           || !image["base64"].isString() || !image["alt"].isString()) return {elo::LoadStatus::invalid, {}};
       const auto mime = image["mime"].toString();
       if (mime != "image/png" && mime != "image/jpeg") return {elo::LoadStatus::invalid, {}};
@@ -130,6 +143,7 @@ QtRuntime::QtRuntime(QQuickWindow& window, ClientModel& model, const elo::Clock&
     : window_(window), model_(model), clock_(clock), network_(network),
       health_file_(std::move(health_file)), token_(std::move(token)) {
   timer_.setInterval(2000);
+  QObject::connect(&model_, &ClientModel::changed, &window_, [this] { window_.update(); });
   QObject::connect(&timer_, &QTimer::timeout, this, [this] { sample(); });
   // During synchronization the GUI thread is blocked. Copy identity with the
   // scene being rendered, rather than reading newer model state after a queued frame.

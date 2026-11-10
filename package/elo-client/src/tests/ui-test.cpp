@@ -284,6 +284,137 @@ class UiTest : public QObject {
     store.bytes = QJsonDocument(document).toJson();
     QCOMPARE(catalog.load().status, elo::LoadStatus::invalid);
   }
+  void revealConcealsImageUntilActivated() {
+    struct MemoryStore : elo::LocalStore {
+      QByteArray bytes;
+      elo::StoredContent read_active() const override { return {elo::LoadStatus::loaded, bytes.toStdString()}; }
+    } store;
+    QImage image(16, 16, QImage::Format_RGB32);
+    image.fill(QColor("#ea2739"));
+    QByteArray raw;
+    QBuffer buffer(&raw); buffer.open(QIODevice::WriteOnly); image.save(&buffer, "PNG");
+    QJsonObject media{{"mime", "image/png"}, {"base64", QString::fromLatin1(raw.toBase64())},
+        {"sha256", QString::fromLatin1(QCryptographicHash::hash(raw, QCryptographicHash::Sha256).toHex())},
+        {"alt", "Imagem revelada"}};
+    QJsonObject page{{"title", "Descoberta"}, {"body", "Conteúdo revelado"},
+                     {"interaction", "reveal"}, {"image", media}};
+    store.bytes = QJsonDocument(QJsonObject{{"schema", 1}, {"id", "reveal-test"}, {"name", "Revelar"},
+        {"version", "3"}, {"pages", QJsonArray{page}}}).toJson();
+    JsonCatalog catalog(store);
+    QCOMPARE(catalog.load().status, elo::LoadStatus::loaded);
+    ClientModel model(nullptr, &catalog);
+    QQmlApplicationEngine engine;
+    engine.rootContext()->setContextProperty("clientModel", &model);
+    engine.load(QUrl("qrc:/Main.qml"));
+    QVERIFY(!engine.rootObjects().isEmpty());
+    auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+    QVERIFY(window);
+    struct Network : elo::NetworkStatus { bool available() const override { return false; } } network;
+    BootClock clock;
+    QtRuntime runtime(*window, model, clock, network);
+    runtime.start();
+    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QTRY_COMPARE(model.state(), "READY_LOCAL");
+    auto* button = window->findChild<QQuickItem*>("revealButton");
+    auto* picture = window->findChild<QQuickItem*>("pageImage");
+    auto* body = window->findChild<QObject*>("pageBody");
+    QVERIFY(button && picture && body);
+    QVERIFY(model.canReveal() && button->isVisible() && !picture->isVisible());
+    QVERIFY(body->property("text").toString() != "Conteúdo revelado");
+    QTest::qWait(100); // Let Column/Flow polish settle before pointer input.
+    const auto publication = model.contentDigest();
+    const auto concealed = model.presentationDigest();
+    QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier,
+        button->mapToScene(QPointF(button->width()/2, button->height()/2)).toPoint());
+    QTRY_VERIFY(!model.canReveal());
+    QCOMPARE(body->property("text").toString(), "Conteúdo revelado");
+    QTRY_VERIFY(picture->isVisible());
+    QTRY_COMPARE(picture->property("status").toInt(), 1);
+    QVERIFY(model.presentationDigest() != concealed);
+    QCOMPARE(model.contentDigest(), publication);
+    model.reset();
+    QTRY_VERIFY(model.canReveal() && button->isVisible() && !picture->isVisible());
+    QCOMPARE(model.presentationDigest(), concealed);
+    // Keyboard activation follows the same accessible button action.
+    button->forceActiveFocus();
+    QTest::keyClick(window, Qt::Key_Return);
+    QTRY_VERIFY(!model.canReveal());
+  }
+  void automaticPresentationHidesControlsAndScrolls() {
+    struct Catalog : elo::ContentCatalog {
+      elo::LoadResult load() override {
+        auto fixture = elo::local_fixture();
+        fixture.version = "4"; fixture.exposure_seconds = 5;
+        fixture.content_hash = std::string(64, 'c');
+        fixture.pages.resize(2);
+        fixture.pages[0].body.clear();
+        for (int i = 0; i < 170; ++i) fixture.pages[0].body += "Texto longo para ler. ";
+        return {elo::LoadStatus::loaded, fixture};
+      }
+    } catalog;
+    ClientModel model(nullptr, &catalog);
+    QQmlApplicationEngine engine;
+    engine.rootContext()->setContextProperty("clientModel", &model);
+    engine.load(QUrl("qrc:/Main.qml"));
+    QVERIFY(!engine.rootObjects().isEmpty());
+    auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+    QVERIFY(window);
+    struct Network : elo::NetworkStatus { bool available() const override { return false; } } network;
+    BootClock clock;
+    QtRuntime runtime(*window, model, clock, network);
+    runtime.start();
+    QVERIFY(QTest::qWaitForWindowExposed(window));
+    QTRY_COMPARE(model.state(), "READY_LOCAL");
+    auto* next = window->findChild<QQuickItem*>("nextButton");
+    auto* scroll = window->findChild<QQuickItem*>("experienceScroll");
+    QVERIFY(next && scroll);
+    QVERIFY(!next->isVisible());
+    QTRY_VERIFY_WITH_TIMEOUT(scroll->property("contentY").toReal() > 20, 2500);
+    QTRY_COMPARE_WITH_TIMEOUT(model.pageNumber(), 2, 6000);
+    QTRY_COMPARE_WITH_TIMEOUT(model.pageNumber(), 1, 6500);
+  }
+  void automaticExposureStartsAfterFrameAndLoopsOffline() {
+    struct Catalog : elo::ContentCatalog {
+      elo::LoadResult result{elo::LoadStatus::loaded, elo::local_fixture()};
+      elo::LoadResult load() override { return result; }
+    } catalog;
+    catalog.result.fixture.version = "4";
+    catalog.result.fixture.exposure_seconds = 5;
+    catalog.result.fixture.content_hash = std::string(64, 'a');
+    catalog.result.fixture.pages.resize(2);
+    catalog.result.fixture.pages[0].interaction = "reveal";
+    ClientModel model(nullptr, &catalog);
+    model.start();
+    QVERIFY(model.autoplay() && !model.canReveal());
+    QCOMPARE(model.body(), QString::fromStdString(catalog.result.fixture.pages[0].body));
+    model.presentationReady();
+    QTest::qWait(5100);
+    QCOMPARE(model.pageNumber(), 1); // No frame confirmation, no exposure timer.
+    model.confirmPresented(model.contentDigest());
+    // Repeated frame acknowledgements must not postpone expiration.
+    QTest::qWait(2000);
+    model.confirmPresented(model.contentDigest());
+    model.setNetworkAvailable(true); model.setNetworkAvailable(false);
+    QTRY_COMPARE_WITH_TIMEOUT(model.pageNumber(), 2, 4000);
+    catalog.result.fixture.pages[0].title = "Nova publicação automática";
+    catalog.result.fixture.content_hash = std::string(64, 'b');
+    model.checkContent();
+    QCOMPARE(model.pageNumber(), 2);
+    model.confirmPresented(model.contentDigest());
+    QTRY_COMPARE_WITH_TIMEOUT(model.pageNumber(), 1, 6500);
+    QCOMPARE(model.title(), "Nova publicação automática");
+    QCOMPARE(model.state(), "BOOTING"); // New publication still requires pixels.
+    model.presentationReady();
+    QVERIFY(model.autoplay());
+    // Selecting automatic content also transitions an existing manual client.
+    Catalog manual_catalog;
+    ClientModel manual(nullptr, &manual_catalog);
+    manual.start(); manual.presentationReady();
+    manual_catalog.result = catalog.result;
+    manual.checkContent();
+    QVERIFY(manual.autoplay());
+    QCOMPARE(manual.state(), "BOOTING");
+  }
   void localPresentation() {
     ClientModel model;
     QSignalSpy changes(&model, &ClientModel::changed);

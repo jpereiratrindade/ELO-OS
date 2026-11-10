@@ -9,11 +9,16 @@
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QtQml/qtqml-config.h>
 #include <QQuickWindow>
 #include <QUrl>
 #include <QRegularExpression>
 #include <QShortcut>
+#include <QCursor>
 #include <QKeySequence>
+
+static_assert(QT_FEATURE_qml_network == 1,
+              "ELO requires Qt QML network support to present embedded image URLs");
 
 int main(int argc, char* argv[]) {
   QGuiApplication app(argc, argv);
@@ -47,6 +52,13 @@ int main(int argc, char* argv[]) {
   JsonCatalog catalog(store);
   QtDiagnostics diagnostics;
   ClientModel model(nullptr, parser.isSet("content-dir") ? &catalog : nullptr, &diagnostics);
+  bool cursor_hidden = false;
+  QObject::connect(&model, &ClientModel::changed, &app, [&model, &cursor_hidden] {
+    if (model.autoplay() == cursor_hidden) return;
+    cursor_hidden = model.autoplay();
+    if (cursor_hidden) QGuiApplication::setOverrideCursor(QCursor(Qt::BlankCursor));
+    else QGuiApplication::restoreOverrideCursor();
+  });
   std::unique_ptr<ContentSync> sync;
   if (parser.isSet("server")) {
     sync = std::make_unique<ContentSync>(model, parser.value("content-dir"), QUrl(parser.value("server")),

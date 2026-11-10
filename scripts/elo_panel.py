@@ -12,6 +12,7 @@ from urllib.parse import urlsplit, unquote
 from elo_content import decode, encoded, sync_dir
 from elo_import import snapshot, records, project, project_snapshot
 from elo_receipts import Receipts
+from elo_terminals import Terminals
 import os
 import tempfile
 
@@ -26,12 +27,23 @@ class Panel:
         self.studio_port = studio_port
         self.lock = threading.RLock()
         self.receipts = Receipts(self.selection_file.parent / "receipt.json")
+        self.terminals = Terminals(self.selection_file.parent / "terminals.json", self.receipts)
 
     def variants(self):
         with self.lock:
             if not self.selection_file.exists():
                 return self.defaults
             return decode(self.selection_file.read_bytes())['variants']
+
+    def exposure_seconds(self):
+        with self.lock:
+            if not self.selection_file.exists(): return 0
+            return decode(self.selection_file.read_bytes()).get('exposure_seconds', 0)
+
+    def envelope(self):
+        from elo_server import envelope
+        with self.lock:
+            return envelope(self.bundle, self.variants(), self.exposure_seconds())
 
     def status(self):
         manifest, files = snapshot(self.bundle)
@@ -51,17 +63,23 @@ class Panel:
             except (ValueError, TypeError, KeyError):
                 supported = False
             choices.append({'id': key, 'title': presentation.get('title', key),
-                            'text': presentation.get('text', ''), 'supported': supported, 'image': image_info})
+                            'text': presentation.get('text', ''), 'supported': supported, 'image': image_info, 'interaction': value.get('interaction', 'none')})
         return {'manifest': manifest, 'variants': choices, 'selected': self.variants(),
-                'studio_available': self.studio_available(), 'delivery': self.delivery()}
+                'terminals': self.terminal_status(), 'exposure_seconds': self.exposure_seconds(), 'studio_available': self.studio_available(), 'delivery': self.delivery()}
 
     def delivery(self):
         try:
-            payload, _ = project(self.bundle, self.variants())
+            payload = decode(self.envelope())['presentation'].encode()
             expected = hashlib.sha256(payload).hexdigest()
         except (ValueError, OSError, KeyError):
             expected = None
         return self.receipts.status(expected)
+
+    def terminal_status(self):
+        try:
+            expected = decode(self.envelope())['sha256']
+        except (ValueError, OSError, KeyError): expected = None
+        return self.terminals.status(expected)
 
     def studio_available(self):
         try:
@@ -78,12 +96,15 @@ class Panel:
     def select(self, value):
         from elo_server import envelope
         with self.lock:
-            if not isinstance(value, dict) or set(value) != {'variants', 'expected_hash'}:
+            if not isinstance(value, dict) or set(value) not in ({'variants', 'expected_hash'}, {'variants', 'expected_hash', 'exposure_seconds'}):
                 raise ValueError('Seleção inválida')
+            seconds = value.get('exposure_seconds', 0)
+            if type(seconds) is not int or (seconds != 0 and not 5 <= seconds <= 3600):
+                raise ValueError('Tempo deve ser entre 5 e 3600 segundos')
             variants = value['variants']
             if not isinstance(variants, list) or any(not isinstance(x, str) for x in variants):
                 raise ValueError('Lista de variantes inválida')
-            result = decode(envelope(self.bundle, variants))
+            result = decode(envelope(self.bundle, variants, seconds))
             if result['source']['content_hash'] != value['expected_hash']:
                 raise ValueError('Publicação mudou; atualize a página antes de confirmar')
             self.selection_file.parent.mkdir(parents=True, exist_ok=True)
@@ -91,7 +112,7 @@ class Panel:
             os.close(fd)
             try:
                 with open(name, 'wb') as stream:
-                    stream.write(encoded({'variants': variants}))
+                    stream.write(encoded({'variants': variants, 'exposure_seconds': seconds}))
                     stream.flush()
                     os.fsync(stream.fileno())
                 os.replace(name, self.selection_file)
