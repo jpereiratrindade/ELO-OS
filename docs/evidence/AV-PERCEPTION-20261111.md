@@ -88,3 +88,17 @@ Validação desta correção:
   precedência de argumentos, ausência de detector e operação sem reconhecedor.
 - Avisos de sondagem de GPU/VDPAU persistiram durante o teste de interface;
   não impediram a prévia. Não houve cadastro nem reconhecimento de pessoa real.
+
+## Aproveitamento da janela
+
+As margens externas passaram de 7% da largura para 2%, limitadas a 12–24 px.
+A prévia fica junto ao canto superior direito, dentro dessa margem. O cartão
+usa o espaço até o primeiro controle inferior realmente visível; a navegação
+manual oculta no modo automático não reserva mais uma faixa vazia. Rodapé e
+intervalos ficaram menores, preservando botões de 48 px e a leitura do conteúdo.
+Imagens e vídeos podem crescer até 420 px em janelas largas, em vez de 240 px.
+
+O contrato QML passou nas resoluções 640 × 480, 1024 × 640 e 1920 × 1080,
+verificando cartão com pelo menos 95% da largura e 55% da altura da janela
+no cenário automático com controles de reconhecimento visíveis. A suíte de
+interface completa passou, incluindo navegação manual e rolagem automática.

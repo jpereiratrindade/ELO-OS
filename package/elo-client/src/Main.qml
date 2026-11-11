@@ -58,7 +58,7 @@ Window {
     Item {
         id: content
         anchors.fill: parent
-        anchors.margins: Math.max(24, window.width * 0.07)
+        anchors.margins: Math.max(12, Math.min(24, window.width * 0.02))
         focus: true
         Keys.onRightPressed: clientModel.next()
         Keys.onLeftPressed: clientModel.previous()
@@ -81,8 +81,8 @@ Window {
             visible: window.perception !== null
             anchors.top: parent.top
             anchors.right: parent.right
-            width: 140
-            height: 92
+            width: 120
+            height: 80
             radius: 8
             color: "#020617"
             border.width: 2
@@ -128,12 +128,14 @@ Window {
         }
         Rectangle {
             id: contentCard
+            objectName: "contentCard"
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: header.top
-            anchors.topMargin: cameraPreview.visible ? cameraPreview.height + 16 : header.height + 32
-            anchors.bottom: actions.top
-            anchors.bottomMargin: 24
+            anchors.topMargin: Math.max(cameraPreview.visible ? cameraPreview.height : 0,
+                                        header.height + perceptionStatus.implicitHeight + 4) + 8
+            anchors.bottom: actions.visible ? actions.top : mediaControls.visible ? mediaControls.top : footer.top
+            anchors.bottomMargin: 8
             color: Theme.surface
             radius: 13
             border.color: Theme.line
@@ -144,7 +146,7 @@ Window {
             property string currentPage: clientModel.exposureCycle + "|" + clientModel.pageNumber + "|" + clientModel.title + "|" + clientModel.body
             onCurrentPageChanged: Qt.callLater(scheduleScroll)
             anchors.fill: contentCard
-            anchors.margins: 24
+            anchors.margins: window.width < 800 ? 16 : 24
             clip: true
             contentWidth: width
             contentHeight: contentColumn.implicitHeight
@@ -187,7 +189,7 @@ Window {
                     source: clientModel.imageSource
                     onSourceChanged: experience.contentY = 0
                     width: pageFlow.compact ? pageFlow.width : pageFlow.width * 0.42
-                    height: visible ? Math.max(110, Math.min(240, experience.height - 50)) : 0
+                    height: visible ? Math.max(110, Math.min(pageFlow.compact ? 240 : 420, experience.height - 50)) : 0
                     sourceSize.width: 1280
                     sourceSize.height: 720
                     fillMode: Image.PreserveAspectFit
@@ -205,7 +207,7 @@ Window {
                     source: clientModel.mediaSource
                     active: clientModel.playbackAllowed
                     width: pageFlow.compact ? pageFlow.width : pageFlow.width * 0.42
-                    height: visible ? Math.max(110, Math.min(240, experience.height - 50)) : 0
+                    height: visible ? Math.max(110, Math.min(pageFlow.compact ? 240 : 420, experience.height - 50)) : 0
                     visible: clientModel.mediaKind === "video" && clientModel.mediaSource.length > 0
                 }
                 Column {
@@ -272,6 +274,7 @@ Window {
             wrapMode: Text.WordWrap
         }
         Text {
+            id: perceptionStatus
             anchors.top: header.bottom
             anchors.topMargin: 4
             width: parent.width - (cameraPreview.visible ? cameraPreview.width + 16 : 0)
@@ -285,7 +288,7 @@ Window {
             id: mediaControls
             anchors.left: parent.left
             anchors.bottom: footer.top
-            anchors.bottomMargin: visible ? 12 : 0
+            anchors.bottomMargin: visible ? 8 : 0
             spacing: 8
             visible: clientModel.mediaSource.length > 0 || (window.perception && window.perception.operational && window.perception.recognitionAvailable)
             LocalButton {
@@ -319,7 +322,7 @@ Window {
             visible: !clientModel.autoplay
             anchors.left: parent.left
             anchors.bottom: mediaControls.visible ? mediaControls.top : footer.top
-            anchors.bottomMargin: 24
+            anchors.bottomMargin: 8
             spacing: 12
             LocalButton { objectName: "previousButton"; label: "Voltar"; enabled: clientModel.canPrevious; onActivated: clientModel.previous() }
             LocalButton {
@@ -340,7 +343,7 @@ Window {
             text: (clientModel.autoplay ? "ELO · " + clientModel.pageNumber + " / " + clientModel.pageCount + " · " + clientModel.exposureSeconds + " s" : clientModel.state + " · " + clientModel.fixtureLabel + "\n" + clientModel.connectivity + (clientModel.contentUpdate.length > 0 ? "\n" + clientModel.contentUpdate : "") + "\nNo seu tempo. Sem conexão necessária.") + "\nSimples, leve. Sempre pronto. Sempre incompleto!"
             color: Theme.muted
             font.family: window.uiFont
-            font.pixelSize: 15
+            font.pixelSize: 12
         }
     }
 }

@@ -32,7 +32,17 @@ class UiTest : public QObject {
  private slots:
   void initTestCase() { registerMediaTypes(); }
   void cameraPreviewStatesAndFrames() {
-    ClientModel model;
+    struct Catalog : elo::ContentCatalog {
+      elo::LoadResult load() override {
+        auto fixture = elo::local_fixture();
+        fixture.version = "4"; fixture.exposure_seconds = 5;
+        fixture.content_hash = std::string(64, 'c');
+        return {elo::LoadStatus::loaded, fixture};
+      }
+    } catalog;
+    ClientModel model(nullptr, &catalog);
+    model.start();
+    QVERIFY(model.autoplay());
     PreviewProperties perception;
     perception.insert("status", "Câmera desligada");
     for (const auto* name : {"operational", "facePresent", "attention", "authorized", "recognitionAvailable", "canEnroll", "hasProfile", "hasCandidate"})
@@ -70,13 +80,21 @@ class UiTest : public QObject {
     QCOMPARE(status->property("text").toString(), "Confirmar visita?");
     perception.insert("hasProfile", true);
     QCOMPARE(status->property("text").toString(), "Visita confirmada");
-    window->resize(640, 480);
-    QCoreApplication::processEvents();
-    const auto box = preview->mapRectToScene(preview->boundingRect());
-    QVERIFY(box.right() <= window->width()); QVERIFY(box.top() >= 0);
+    perception.insert("recognitionAvailable", true);
     auto* experience = window->findChild<QQuickItem*>("experienceScroll");
-    QVERIFY(experience);
-    QVERIFY(experience->mapToScene(QPointF()).y() > box.bottom());
+    auto* card = window->findChild<QQuickItem*>("contentCard");
+    QVERIFY(experience && card);
+    for (const auto& size : {QSize(1024, 640), QSize(640, 480), QSize(1920, 1080)}) {
+      window->resize(size);
+      QCoreApplication::processEvents();
+      const auto box = preview->mapRectToScene(preview->boundingRect());
+      QVERIFY(window->width() - box.right() <= 24); QVERIFY(box.top() <= 24);
+      QVERIFY(box.right() <= window->width()); QVERIFY(box.top() >= 0);
+      QVERIFY(experience->mapToScene(QPointF()).y() > box.bottom());
+      QVERIFY(card->width() >= window->width() * 0.95);
+      QTRY_VERIFY2(card->height() >= window->height() * 0.55,
+                   qPrintable(QString("window=%1x%2 card=%3x%4 y=%5 autoplay=%6").arg(window->width()).arg(window->height()).arg(card->width()).arg(card->height()).arg(card->y()).arg(model.autoplay())));
+    }
     perception.insert("operational", false);
     perception.insert("previewRevision", 0);
     QTRY_VERIFY(!image->isVisible());
