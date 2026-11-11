@@ -6,6 +6,7 @@
 #include <memory>
 #ifdef ELO_HAS_VISION
 #include "perception/PerceptionModel.hpp"
+#include "perception/CameraImageProvider.hpp"
 #endif
 #include <QCommandLineParser>
 #include <QDir>
@@ -93,6 +94,9 @@ int main(int argc, char* argv[]) {
   engine.rootContext()->setContextProperty("clientModel", &model);
 #ifdef ELO_HAS_VISION
   PerceptionModel perception(parser.value("camera"), parser.value("detector-model"), parser.value("recognizer-model"), parser.value("recognition-store"));
+  auto* cameraPreview = new CameraImageProvider;
+  engine.addImageProvider("camera", cameraPreview);
+  QObject::connect(&perception, &PerceptionModel::previewFrame, &engine, [cameraPreview](const QImage& frame) { cameraPreview->updateFrame(frame); });
   engine.rootContext()->setContextProperty("perceptionModel", &perception);
   QObject::connect(&model, &ClientModel::contentPresented, &perception, [&model, &perception](const QByteArray& digest) {
     perception.presentation(QString::fromLatin1(digest), model.pageNumber());

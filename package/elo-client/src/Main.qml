@@ -76,11 +76,62 @@ Window {
             Text { text: "ELO/OS · experiências"; font.family: window.uiFont; color: Theme.muted; font.pixelSize: 17; anchors.verticalCenter: parent.verticalCenter }
         }
         Rectangle {
+            id: cameraPreview
+            objectName: "cameraPreview"
+            visible: window.perception !== null
+            anchors.top: parent.top
+            anchors.right: parent.right
+            width: 140
+            height: 92
+            radius: 8
+            color: "#020617"
+            border.width: 2
+            border.color: window.perception && window.perception.attention ? "#34d399"
+                          : window.perception && window.perception.facePresent ? "#38bdf8" : Theme.muted
+            clip: true
+            Image {
+                objectName: "cameraPreviewImage"
+                anchors.fill: parent
+                anchors.margins: 2
+                source: window.perception && window.perception.previewRevision > 0
+                        ? "image://camera/live?" + window.perception.previewRevision : ""
+                visible: window.perception && window.perception.operational && window.perception.previewRevision > 0
+                cache: false
+                fillMode: Image.PreserveAspectFit
+                Accessible.name: "Prévia local da câmera com detecção de rosto"
+            }
+            Text {
+                anchors.centerIn: parent
+                visible: !window.perception || !window.perception.operational
+                text: "Câmera inativa"
+                color: "white"
+                font.pixelSize: 12
+            }
+            Rectangle {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                height: 22
+                color: "#cc020617"
+                Text {
+                    objectName: "cameraPreviewStatus"
+                    anchors.centerIn: parent
+                    color: "white"
+                    font.pixelSize: 10
+                    text: !window.perception || !window.perception.operational ? "Sensor inativo"
+                          : window.perception.hasProfile ? "Visita confirmada"
+                          : window.perception.hasCandidate ? "Confirmar visita?"
+                          : window.perception.attention ? "Rosto orientado"
+                          : window.perception.facePresent ? "Rosto detectado" : "Aguardando rosto"
+                }
+            }
+        }
+        Rectangle {
             id: contentCard
             anchors.left: parent.left
             anchors.right: parent.right
-            anchors.top: header.bottom
-            anchors.topMargin: 32
+            anchors.top: header.top
+            anchors.topMargin: cameraPreview.visible ? cameraPreview.height + 16 : header.height + 32
             anchors.bottom: actions.top
             anchors.bottomMargin: 24
             color: Theme.surface
@@ -223,7 +274,7 @@ Window {
         Text {
             anchors.top: header.bottom
             anchors.topMargin: 4
-            width: parent.width
+            width: parent.width - (cameraPreview.visible ? cameraPreview.width + 16 : 0)
             text: window.perception ? window.perception.status : ""
             color: Theme.muted
             font.family: window.uiFont

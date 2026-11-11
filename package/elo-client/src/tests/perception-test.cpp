@@ -45,7 +45,12 @@ class PerceptionTest : public QObject {
     const auto device = qEnvironmentVariable("ELO_TEST_CAMERA");
     if (device.isEmpty()) QSKIP("Hardware capture requires explicit ELO_TEST_CAMERA and ELO_TEST_DETECTOR");
     PerceptionModel p(device, qEnvironmentVariable("ELO_TEST_DETECTOR"), {}, {});
+    QSignalSpy preview(&p, &PerceptionModel::previewFrame);
     p.start(); QTRY_VERIFY_WITH_TIMEOUT(p.operational(), 10000);
+    QTRY_VERIFY_WITH_TIMEOUT(p.previewRevision() >= 2, 10000);
+    QVERIFY(preview.size() >= 2);
+    const auto frame = qvariant_cast<QImage>(preview.last().first());
+    QVERIFY(!frame.isNull()); QVERIFY(frame.width() >= 320);
     QTRY_VERIFY_WITH_TIMEOUT(p.processedFrames() >= 3, 10000); QVERIFY(p.operational()); QVERIFY(!p.authorized()); QVERIFY(!p.recognitionAvailable());
   }
   void invalidStoreNeverEnablesRecognition() {

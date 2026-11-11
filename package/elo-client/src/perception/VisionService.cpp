@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Adapted from ELO src/perception; no preview or frame persistence.
+// Adapted from ELO src/perception; transient local preview, no frame persistence.
 #include "VisionService.hpp"
 
 #include <opencv2/core.hpp>
@@ -143,9 +143,9 @@ QImage preview_image(
             : (attention_active ? cv::Scalar(245, 159, 8) : cv::Scalar(8, 159, 245));
         cv::rectangle(annotated, bounds, color, 2);
         const auto* label = recognition_confirmed
-            ? "identidade reconhecida"
+            ? "visita confirmada"
             : (authorized ? "reconhecendo..."
-                          : (attention_active ? "atencao ativa" : "presenca detectada"));
+                          : (attention_active ? "rosto orientado" : "presenca detectada"));
         cv::putText(
             annotated,
             label,
@@ -330,6 +330,7 @@ struct VisionService::Impl {
                     }
                 }
 
+                emit owner->frameReady(preview_image(frame, face, authorized, confirmed, attention_reported));
                 frame.setTo(0);
                 faces.setTo(0);
             }

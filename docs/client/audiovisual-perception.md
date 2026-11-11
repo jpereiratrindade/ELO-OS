@@ -2,8 +2,8 @@
 
 O cliente oferece reprodução de áudio/vídeo publicada pelo Estúdio ELO, cache
 validado para operação offline e percepção facial opcional, reaproveitada do
-ELO anterior. A câmera não é exigida para apresentar conteúdo. Sua ativação é
-explícita; reconhecimento ainda exige adesão na tela.
+ELO anterior. A câmera não é exigida para apresentar conteúdo. O lançador audiovisual da bancada ativa a câmera local por padrão;
+reconhecimento ainda exige adesão na tela. O executável direto requer `--camera`.
 
 ## Recursos implementados
 
@@ -60,8 +60,14 @@ binário audiovisual separados do cliente instalado anteriormente:
 
 Ele reutiliza servidor, credencial e cache configurados por `run-thin-client.sh`.
 Não execute simultaneamente dois clientes usando a mesma identidade de terminal.
-Não altera autostart, não substitui o binário instalado e não liga câmera sem
-`--camera`. Não use esse lançador de desenvolvimento como `ExecStart` do
+O lançador abre `/dev/video0` com os modelos locais do ELO anterior e mostra
+prévia no canto superior direito, incluindo contorno e estado do rosto.
+Reconhecimento e cadastro continuam dependendo de adesão na tela. Para executar
+sem câmera, use `ELO_CAMERA=off ./scripts/run-audiovisual-client.sh`.
+`ELO_CAMERA` seleciona outro dispositivo; `ELO_VISION_MODEL_DIR` seleciona o
+diretório dos modelos. Argumentos explícitos de câmera/modelos têm precedência.
+Ausência do detector desativa a câmera com aviso; nenhuma dependência é baixada.
+Não altera autostart nem substitui o binário instalado. Não use como `ExecStart` do
 supervisor: a entrada em container modifica a árvore de processos observada.
 
 Para percepção e reconhecimento opcionais:
@@ -96,7 +102,7 @@ autorização da visita. Sem adesão não são produzidas representações biom�
 
 ## Persistência e limites de reconhecimento
 
-Frames são transitórios; o cliente não persiste fotografias, não exporta
+A prévia usa frames transitórios em memória, sem arquivos ou envio pela rede; o cliente não persiste fotografias, não exporta
 representações e não as inclui na telemetria de distribuição. O cadastro
 contém identificador aleatório local, representação SFace, hash do modelo,
 hash da publicação e página. O arquivo tem permissão 0600 e deve ficar em
@@ -128,6 +134,7 @@ física; testes na workstation não demonstram esse funcionamento.
 ## Validação reproduzível
 
 ```bash
+python3 tests/client/audiovisual-launcher-test.py
 python3 tests/client/audiovisual-content-test.py
 python3 tests/client/elo-import-test.py
 python3 tests/client/local-content-test.py
@@ -154,4 +161,4 @@ ponto de instalação continuam verificações físicas distintas.
 O Estúdio ELO tem testes de upload/serviço de vídeo, publicação e segurança.
 A implantação operacional exige atualizar o Estúdio e o distribuidor com os
 instaladores existentes; esta etapa não troca automaticamente as instalações
-nem ativa serviço/câmera. O cliente continua sem autostart.
+nem habilita serviços. O cliente continua sem autostart.

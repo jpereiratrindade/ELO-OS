@@ -49,18 +49,26 @@ void PerceptionModel::start() {
     status_ = (text == "Atenção detectada" ? QStringLiteral("Rosto orientado à tela (estimativa)") : text) + " · processamento local"; emit changed();
   });
   connect(service_.get(), &elo::perception::VisionService::failure, this, [this](const QString&) {
-    operational_ = false; attention_ = false; setAuthorized(false);
+    operational_ = false; attention_ = false; face_present_ = false;
+    emit previewFrame(QImage{}); preview_revision_ = 0; emit previewChanged();
+    setAuthorized(false);
     status_ = "Câmera indisponível · reprodução mantida"; emit changed();
     QTimer::singleShot(5000, this, [this] { service_.reset(); start(); });
   });
   connect(service_.get(), &elo::perception::VisionService::facePresenceChanged, this, [this](bool present) {
+    face_present_ = present;
     if (!present) setAuthorized(false);
+    emit changed();
   });
   connect(service_.get(), &elo::perception::VisionService::attentionChanged, this, [this](bool engaged, double) {
     attention_ = engaged; status_ = engaged ? "Rosto orientado à tela · estimativa local" : "Aguardando aproximação"; emit changed();
   });
   connect(service_.get(), &elo::perception::VisionService::faceEmbeddingReady, this, &PerceptionModel::observeEmbedding);
   connect(service_.get(), &elo::perception::VisionService::observationProcessed, this, [this] { ++processed_frames_; });
+  connect(service_.get(), &elo::perception::VisionService::frameReady, this, [this](const QImage& frame) {
+    emit previewFrame(frame); ++preview_revision_; emit previewChanged();
+  });
+  connect(this, &PerceptionModel::changed, service_.get(), [this] { service_->setRecognitionConfirmed(hasProfile()); });
   service_->start();
 }
 void PerceptionModel::setAuthorized(bool authorized) {

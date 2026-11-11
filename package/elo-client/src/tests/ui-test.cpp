@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "ClientModel.hpp"
 #include "MediaSurface.hpp"
+#include "perception/CameraImageProvider.hpp"
+#include <QQmlPropertyMap>
 #include "QtAdapters.hpp"
 #include <QCryptographicHash>
 #include <QFile>
@@ -20,10 +22,66 @@
 #include <QSignalSpy>
 #include <QtTest>
 
+class PreviewProperties : public QQmlPropertyMap {
+ public:
+  PreviewProperties() : QQmlPropertyMap(this, nullptr) {}
+};
+
 class UiTest : public QObject {
   Q_OBJECT
  private slots:
   void initTestCase() { registerMediaTypes(); }
+  void cameraPreviewStatesAndFrames() {
+    ClientModel model;
+    PreviewProperties perception;
+    perception.insert("status", "Câmera desligada");
+    for (const auto* name : {"operational", "facePresent", "attention", "authorized", "recognitionAvailable", "canEnroll", "hasProfile", "hasCandidate"})
+      perception.insert(name, false);
+    perception.insert("resumePage", 0);
+    perception.insert("previewRevision", 0);
+    QQmlApplicationEngine engine;
+    auto* provider = new CameraImageProvider;
+    engine.addImageProvider("camera", provider);
+    engine.rootContext()->setContextProperty("clientModel", &model);
+    engine.rootContext()->setContextProperty("perceptionModel", &perception);
+    engine.load(QUrl("qrc:/Main.qml"));
+    QVERIFY(!engine.rootObjects().isEmpty());
+    auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
+    QVERIFY(window);
+    auto* preview = window->findChild<QQuickItem*>("cameraPreview");
+    auto* status = window->findChild<QQuickItem*>("cameraPreviewStatus");
+    auto* image = window->findChild<QQuickItem*>("cameraPreviewImage");
+    QVERIFY(preview && status && image);
+    QVERIFY(preview->isVisible());
+    QCOMPARE(status->property("text").toString(), "Sensor inativo");
+    QVERIFY(!image->isVisible());
+    QImage frame(640, 480, QImage::Format_RGB32); frame.fill(Qt::green);
+    provider->updateFrame(frame);
+    perception.insert("operational", true);
+    perception.insert("previewRevision", 1);
+    QTRY_COMPARE(image->property("status").toInt(), 1); // Image.Ready
+    QVERIFY(image->isVisible());
+    QCOMPARE(status->property("text").toString(), "Aguardando rosto");
+    perception.insert("facePresent", true);
+    QCOMPARE(status->property("text").toString(), "Rosto detectado");
+    perception.insert("attention", true);
+    QCOMPARE(status->property("text").toString(), "Rosto orientado");
+    perception.insert("hasCandidate", true);
+    QCOMPARE(status->property("text").toString(), "Confirmar visita?");
+    perception.insert("hasProfile", true);
+    QCOMPARE(status->property("text").toString(), "Visita confirmada");
+    window->resize(640, 480);
+    QCoreApplication::processEvents();
+    const auto box = preview->mapRectToScene(preview->boundingRect());
+    QVERIFY(box.right() <= window->width()); QVERIFY(box.top() >= 0);
+    auto* experience = window->findChild<QQuickItem*>("experienceScroll");
+    QVERIFY(experience);
+    QVERIFY(experience->mapToScene(QPointF()).y() > box.bottom());
+    perception.insert("operational", false);
+    perception.insert("previewRevision", 0);
+    QTRY_VERIFY(!image->isVisible());
+    QCOMPARE(status->property("text").toString(), "Sensor inativo");
+  }
   void runtimeHealthRequiresRenderedFrames() {
     struct Network : elo::NetworkStatus {
       bool up = true;

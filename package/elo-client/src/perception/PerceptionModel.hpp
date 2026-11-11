@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 #include <QObject>
+#include <QImage>
 #include <QVector>
 #include <QJsonArray>
 #include <memory>
 namespace elo::perception { class VisionService; }
 class PerceptionModel : public QObject {
   Q_OBJECT
+  Q_PROPERTY(quint64 previewRevision READ previewRevision NOTIFY previewChanged)
+  Q_PROPERTY(bool facePresent READ facePresent NOTIFY changed)
   Q_PROPERTY(QString status READ status NOTIFY changed)
   Q_PROPERTY(bool operational READ operational NOTIFY changed)
   Q_PROPERTY(bool attention READ attention NOTIFY changed)
@@ -22,6 +25,8 @@ class PerceptionModel : public QObject {
   void start();
   QString status() const { return status_; }
   quint64 processedFrames() const { return processed_frames_; }
+  quint64 previewRevision() const { return preview_revision_; }
+  bool facePresent() const { return face_present_; }
   bool operational() const { return operational_; }
   bool attention() const { return attention_; }
   bool authorized() const { return authorized_; }
@@ -39,6 +44,8 @@ class PerceptionModel : public QObject {
   void observeEmbedding(const QVector<float>& embedding, double quality);
  signals:
   void changed();
+  void previewChanged();
+  void previewFrame(const QImage& frame);
  private:
   bool save();
   void load();
@@ -47,7 +54,8 @@ class PerceptionModel : public QObject {
   QString identity_, candidate_, publication_;
   int page_ = 1;
   bool operational_ = false, attention_ = false, authorized_ = false, gallery_valid_ = true, uncertain_ = false;
-  quint64 processed_frames_ = 0;
+  bool face_present_ = false;
+  quint64 processed_frames_ = 0, preview_revision_ = 0;
   QVector<float> query_;
   QJsonArray profiles_;
   std::unique_ptr<elo::perception::VisionService> service_;

@@ -65,3 +65,26 @@ Correspondência não serve como autenticação nem prova de vivacidade.
   cognitiva, emoção ou compreensão.
 - Nenhuma imagem Raspberry Pi foi recompilada. Os recursos opcionais no
   Buildroot foram declarados; boot, áudio e desempenho no Pi não foram validados.
+
+## Correção da prévia da câmera
+
+O relato de câmera desligada no lançador simples revelou duas lacunas: argumentos
+de câmera/modelos não eram configurados pelo lançador e o sinal de frames não
+alimentava uma prévia QML. O lançador agora configura `/dev/video0` e reutiliza
+os modelos locais; `ELO_CAMERA=off` mantém execução sem captura. Reconhecimento
+continua exigindo adesão e cadastro explícitos.
+
+Foi restaurado o quadro superior direito com imagem transitória e contorno de
+rosto. A legenda distingue sensor inativo, espera, presença, orientação estimada,
+correspondência pendente e visita confirmada. Frames não são gravados ou enviados.
+
+Validação desta correção:
+
+- Os quatro contratos CTest do build audiovisual passaram, incluindo captura
+  física C270 e recebimento de pelo menos dois frames de prévia não vazios.
+- Teste QML verifica carregamento de imagem sintética pelo provider, estados da
+  legenda, ocultação após falha e posição do quadro em janela de 640 × 480.
+- Cinco testes do lançador verificam configuração padrão, desativação da câmera,
+  precedência de argumentos, ausência de detector e operação sem reconhecedor.
+- Avisos de sondagem de GPU/VDPAU persistiram durante o teste de interface;
+  não impediram a prévia. Não houve cadastro nem reconhecimento de pessoa real.
