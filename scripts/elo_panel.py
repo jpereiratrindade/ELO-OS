@@ -54,16 +54,20 @@ class Panel:
         for key, value in variants.items():
             presentation = value.get('presentation', {})
             image_info = None
+            media_info = None
             try:
                 projected, _ = project_snapshot(manifest, files, [key])
-                image = decode(projected)['pages'][0].get('image')
+                projected_page = decode(projected)['pages'][0]
+                image = projected_page.get('image')
+                if projected_page.get('media'):
+                    media_info = {k: projected_page['media'][k] for k in ('kind', 'mime')}
                 if image:
                     image_info = {'alt': image['alt'], 'mime': image['mime']}
                 supported = True
             except (ValueError, TypeError, KeyError):
                 supported = False
             choices.append({'id': key, 'title': presentation.get('title', key),
-                            'text': presentation.get('text', ''), 'supported': supported, 'image': image_info, 'interaction': value.get('interaction', 'none')})
+                            'text': presentation.get('text', ''), 'supported': supported, 'image': image_info, 'media': media_info, 'interaction': value.get('interaction', 'none')})
         return {'manifest': manifest, 'variants': choices, 'selected': self.variants(),
                 'terminals': self.terminal_status(), 'exposure_seconds': self.exposure_seconds(), 'studio_available': self.studio_available(), 'delivery': self.delivery()}
 

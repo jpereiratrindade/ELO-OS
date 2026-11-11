@@ -12,6 +12,9 @@ class ClientModel : public QObject {
   Q_PROPERTY(QString title READ title NOTIFY changed)
   Q_PROPERTY(QString body READ body NOTIFY changed)
   Q_PROPERTY(QString imageSource READ imageSource NOTIFY changed)
+  Q_PROPERTY(QString mediaSource READ mediaSource NOTIFY changed)
+  Q_PROPERTY(QString mediaKind READ mediaKind NOTIFY changed)
+  Q_PROPERTY(bool playbackAllowed READ playbackAllowed NOTIFY changed)
   Q_PROPERTY(QString imageAlt READ imageAlt NOTIFY changed)
   Q_PROPERTY(int pageNumber READ pageNumber NOTIFY changed)
   Q_PROPERTY(int pageCount READ pageCount NOTIFY changed)
@@ -42,6 +45,12 @@ class ClientModel : public QObject {
   QString body() const;
   QString imageSource() const;
   QString imageAlt() const;
+  QString mediaSource() const;
+  QString mediaKind() const;
+  bool playbackAllowed() const { return playback_allowed_; }
+  void setPlaybackAllowed(bool allowed);
+  Q_INVOKABLE void resumePage(int page);
+  Q_INVOKABLE void setMediaDuration(qint64 milliseconds);
   int pageNumber() const { return client_.page_count() ? static_cast<int>(client_.index() + 1) : 0; }
   int pageCount() const { return static_cast<int>(client_.page_count()); }
   QString fixtureLabel() const;
@@ -81,4 +90,8 @@ class ClientModel : public QObject {
   QByteArray timed_page_;
   bool network_available_ = false;
   QString server_status_;
+  bool playback_allowed_ = true;
+  int paused_exposure_ms_ = 0;
+  qint64 media_duration_ms_ = 0;
+  int target_exposure_ms_ = 0;
 };

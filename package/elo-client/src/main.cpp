@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
+#include "MediaSurface.hpp"
 #include "ClientModel.hpp"
 #include "QtAdapters.hpp"
 #include "ContentSync.hpp"
 #include <memory>
+#ifdef ELO_HAS_VISION
+#include "perception/PerceptionModel.hpp"
+#endif
 #include <QCommandLineParser>
 #include <QDir>
 #include <QDebug>
@@ -36,7 +40,23 @@ int main(int argc, char* argv[]) {
   parser.addOption({"token-file", "Private individual terminal bearer token file.", "file"});
   parser.addOption({"ca-file", "Trust this CA bundle for the distribution server.", "file"});
   parser.addOption({"allow-loopback-http", "Explicit HTTP development on literal 127.0.0.1 only."});
+  parser.addOption({"camera", "Opt-in local camera device, for example /dev/video0.", "device"});
+  parser.addOption({"detector-model", "Local YuNet ONNX detector.", "file"});
+  parser.addOption({"recognizer-model", "Local SFace ONNX recognizer; enrollment still requires on-screen consent.", "file"});
+  parser.addOption({"recognition-store", "Absolute private file for optional local visit profiles.", "file"});
+  parser.addOption({"attention-playback", "Pause exposure and audiovisual playback while nobody faces an operational camera."});
   parser.process(app);
+#ifndef ELO_HAS_VISION
+  if (parser.isSet("camera") || parser.isSet("recognizer-model") || parser.isSet("recognition-store") || parser.isSet("attention-playback")) {
+    qCritical() << "Build with ELO_ENABLE_VISION to enable local camera perception"; return 2;
+  }
+#endif
+  if ((parser.isSet("camera") && !parser.isSet("detector-model"))
+      || ((parser.isSet("recognizer-model") || parser.isSet("recognition-store"))
+          && (!parser.isSet("camera") || !parser.isSet("recognizer-model") || !parser.isSet("recognition-store")))
+      || (parser.isSet("attention-playback") && !parser.isSet("camera"))) {
+    qCritical() << "Camera requires detector; recognition requires camera, recognizer and private store"; return 2;
+  }
   if ((parser.isSet("server") && (!parser.isSet("content-dir") || !parser.isSet("token-file")))
       || (!parser.isSet("server") && (parser.isSet("token-file") || parser.isSet("ca-file") || parser.isSet("allow-loopback-http")))) {
     qCritical() << "Distribution requires --server, --content-dir and --token-file together";
@@ -68,8 +88,19 @@ int main(int argc, char* argv[]) {
     const auto error = sync->configure();
     if (!error.isEmpty()) { qCritical().noquote() << error; return 2; }
   }
+  registerMediaTypes();
   QQmlApplicationEngine engine;
   engine.rootContext()->setContextProperty("clientModel", &model);
+#ifdef ELO_HAS_VISION
+  PerceptionModel perception(parser.value("camera"), parser.value("detector-model"), parser.value("recognizer-model"), parser.value("recognition-store"));
+  engine.rootContext()->setContextProperty("perceptionModel", &perception);
+  QObject::connect(&model, &ClientModel::contentPresented, &perception, [&model, &perception](const QByteArray& digest) {
+    perception.presentation(QString::fromLatin1(digest), model.pageNumber());
+  });
+  if (parser.isSet("attention-playback")) QObject::connect(&perception, &PerceptionModel::changed, &model, [&model, &perception] {
+    model.setPlaybackAllowed(!perception.operational() || perception.attention());
+  });
+#endif
   engine.load(QUrl(QStringLiteral("qrc:/Main.qml")));
   if (engine.rootObjects().isEmpty()) return 2;
   auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
@@ -88,6 +119,9 @@ int main(int argc, char* argv[]) {
     }, Qt::QueuedConnection);
   }
   runtime.start();
+#ifdef ELO_HAS_VISION
+  perception.start();
+#endif
   if (parser.isSet("fullscreen")) {
     window->showFullScreen();
   }

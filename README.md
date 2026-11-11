@@ -206,3 +206,5 @@ O código próprio do ELO/OS é licenciado sob **GPL-3.0-only**, conforme decis�
 **Simples, leve. Sempre pronto. Sempre incompleto!**
 
 [Significado e símbolos das premissas](docs/sister-principles/README.md).
+
+Experiência opcional: [áudio, vídeo offline e percepção facial local](docs/client/audiovisual-perception.md).

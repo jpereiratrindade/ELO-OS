@@ -14,13 +14,15 @@
 #include <QRegularExpression>
 #include <QSaveFile>
 #include <QStringList>
+#include <QUrl>
+#include <QMap>
 #include <ifaddrs.h>
 #include <net/if.h>
 #include <sys/socket.h>
 #include <time.h>
 
 namespace {
-constexpr qsizetype max_content = 8 * 1024 * 1024;
+constexpr qsizetype max_content = 32 * 1024 * 1024;
 QByteArray bounded_file(const QString& path, qsizetype limit) {
   if (QFileInfo(path).isSymLink()) return {};
   QFile file(path);
@@ -72,7 +74,7 @@ elo::LoadResult JsonCatalog::load() {
                        json["version"].toString().toStdString(), {}};
   if (json.contains("exposure_seconds")) {
     const auto seconds = json["exposure_seconds"].toDouble(-1);
-    if (fixture.version != "4" || seconds < 5 || seconds > 3600 || seconds != static_cast<int>(seconds))
+    if ((fixture.version != "4" && fixture.version != "5") || seconds < 5 || seconds > 3600 || seconds != static_cast<int>(seconds))
       return {elo::LoadStatus::invalid, {}};
     fixture.exposure_seconds = static_cast<int>(seconds);
   }
@@ -80,18 +82,55 @@ elo::LoadResult JsonCatalog::load() {
   if (pages.isEmpty() || pages.size() > 32) return {elo::LoadStatus::invalid, {}};
   for (const auto& value : pages) {
     const auto page = value.toObject();
-    if ((!keys(page, {"title", "body"}) && !keys(page, {"title", "body", "image"})
-        && !keys(page, {"title", "body", "interaction"}) && !keys(page, {"title", "body", "image", "interaction"})) || !page["title"].isString() || !page["body"].isString())
+    auto fields = page.keys();
+    for (const auto& key : {"title", "body", "image", "interaction", "media"}) fields.removeAll(key);
+    if (!fields.isEmpty() || !page["title"].isString() || !page["body"].isString())
       return {elo::LoadStatus::invalid, {}};
     fixture.pages.push_back({page["title"].toString().toStdString(), page["body"].toString().toStdString()});
     if (page.contains("interaction")) {
-      if ((fixture.version != "3" && fixture.version != "4") || !page["interaction"].isString()
+      if ((fixture.version != "3" && fixture.version != "4" && fixture.version != "5") || !page["interaction"].isString()
           || (page["interaction"] != "none" && page["interaction"] != "reveal")) return {elo::LoadStatus::invalid, {}};
       fixture.pages.back().interaction = page["interaction"].toString().toStdString();
     }
+    if (page.contains("media")) {
+#ifndef ELO_HAS_MULTIMEDIA
+      return {elo::LoadStatus::invalid, {}};
+#else
+      const auto media = page["media"].toObject();
+      if (fixture.version != "5" || !keys(media, {"kind", "mime", "sha256", "base64"})
+          || !media["base64"].isString() || !media_cache_.isValid()) return {elo::LoadStatus::invalid, {}};
+      const auto kind = media["kind"].toString();
+      const auto mime = media["mime"].toString();
+      const QMap<QString, QString> formats{{"audio/wav", "wav"}, {"audio/mpeg", "mp3"}, {"audio/ogg", "ogg"},
+                                         {"video/mp4", "mp4"}, {"video/webm", "webm"}};
+      if (!formats.contains(mime) || (kind != "audio" && kind != "video") || !mime.startsWith(kind + "/")
+          || (kind == "video" && page.contains("image"))) return {elo::LoadStatus::invalid, {}};
+      const auto encoded = media["base64"].toString().toLatin1();
+      if (encoded.size() > 12 * 1024 * 1024) return {elo::LoadStatus::invalid, {}};
+      const auto raw = QByteArray::fromBase64(encoded, QByteArray::AbortOnBase64DecodingErrors);
+      const auto hash = QCryptographicHash::hash(raw, QCryptographicHash::Sha256).toHex();
+      const bool signature = mime == "audio/wav" ? raw.startsWith("RIFF") && raw.mid(8, 4) == "WAVE"
+          : mime == "audio/mpeg" ? raw.startsWith("ID3") || (raw.size() > 1 && quint8(raw[0]) == 255 && (quint8(raw[1]) & 224) == 224)
+          : mime == "audio/ogg" ? raw.startsWith("OggS")
+          : mime == "video/mp4" ? raw.mid(4, 4) == "ftyp" : raw.startsWith(QByteArray::fromHex("1a45dfa3"));
+      if (raw.isEmpty() || raw.size() > 8 * 1024 * 1024 || !signature || hash != media["sha256"].toString().toLatin1())
+        return {elo::LoadStatus::invalid, {}};
+      const auto path = media_cache_.filePath(QString::fromLatin1(hash) + '.' + formats[mime]);
+      if (QFileInfo::exists(path)) {
+        if (bounded_file(path, 8 * 1024 * 1024) != raw) return {elo::LoadStatus::invalid, {}};
+      } else {
+        QSaveFile file(path);
+        if (!file.open(QIODevice::WriteOnly) || !file.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner)
+            || file.write(raw) != raw.size() || !file.commit()) return {elo::LoadStatus::invalid, {}};
+      }
+      auto& output = fixture.pages.back();
+      output.media_source = QUrl::fromLocalFile(path).toString().toStdString();
+      output.media_kind = kind.toStdString(); output.media_hash = hash.toStdString();
+#endif
+    }
     if (page.contains("image")) {
       const auto image = page["image"].toObject();
-      if ((fixture.version != "2" && fixture.version != "3" && fixture.version != "4") || !keys(image, {"mime", "sha256", "base64", "alt"})
+      if ((fixture.version != "2" && fixture.version != "3" && fixture.version != "4" && fixture.version != "5") || !keys(image, {"mime", "sha256", "base64", "alt"})
           || !image["base64"].isString() || !image["alt"].isString()) return {elo::LoadStatus::invalid, {}};
       const auto mime = image["mime"].toString();
       if (mime != "image/png" && mime != "image/jpeg") return {elo::LoadStatus::invalid, {}};

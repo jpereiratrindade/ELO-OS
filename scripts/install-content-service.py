@@ -150,7 +150,7 @@ def main():
         'After=network.target elo-studio.service', 'Wants=elo-studio.service', '', '[Service]', 'Type=simple',
         'ExecStart=' + ' '.join(quoted(value) for value in command),
         'Restart=on-failure', 'RestartSec=5', 'UMask=0077',
-        'MemoryMax=128M', 'TasksMax=32', 'LimitNOFILE=128',
+        'MemoryMax=384M', 'TasksMax=32', 'LimitNOFILE=128',
         'NoNewPrivileges=yes', 'PrivateTmp=yes', 'ProtectSystem=strict',
         'ProtectHome=read-only', 'RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX',
         'ReadOnlyPaths=' + quoted(source.parent),

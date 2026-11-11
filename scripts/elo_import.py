@@ -13,9 +13,9 @@ from pathlib import Path, PurePosixPath
 import stat
 import tempfile
 
-from elo_content import MAX_IMAGE, ActivationUncertain, activate, decode, encoded, fixture, read_bytes
+from elo_content import MAX_IMAGE, MAX_MEDIA, ActivationUncertain, activate, decode, encoded, fixture, read_bytes
 
-MAX_FILE = 8 * 1024 * 1024
+MAX_FILE = MAX_MEDIA
 MAX_TOTAL = 32 * 1024 * 1024
 MAX_FILES = 1024
 
@@ -126,18 +126,37 @@ def project_snapshot(manifest, files, variant_ids):
         if variant.get('interaction') == 'reveal':
             page['interaction'] = 'reveal'
         media = presentation.get('media', [])
-        if not isinstance(media, list) or len(media) > 1:
-            raise ValueError('At most one image per page is supported')
-        if media:
-            reference = required_text(media[0], key)
+        modalities = atom.get('modalities', {})
+        if not isinstance(modalities, dict):
+            raise ValueError('Invalid atom modalities')
+        # Explicit variant media wins; otherwise use the atom's published audio/video.
+        if isinstance(media, list) and not any(PurePosixPath(str(x)).suffix.lower() in ('.wav', '.mp3', '.ogg', '.mp4', '.webm') for x in media):
+            audio = modalities.get('audio', [])
+            video = modalities.get('video', [])
+            if not isinstance(audio, list) or not isinstance(video, list) or len(audio) > 1 or len(video) > 1 or (audio and video):
+                raise ValueError('Select one audiovisual asset per atom or variant')
+            media = media + audio + video
+        if not isinstance(media, list) or len(media) > 2:
+            raise ValueError('At most one image and one audio, or one video per page are supported')
+        for reference in media:
+            reference = required_text(reference, key)
             path = PurePosixPath(reference)
             if path.is_absolute() or '..' in path.parts or '\\' in reference or '?' in reference or '#' in reference:
                 raise ValueError('Invalid image reference')
             name = reference if reference.startswith('assets/') else 'assets/' + reference
             mime = {'.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg'}.get(path.suffix.lower())
             raw = files.get(name)
-            if not mime or not raw or len(raw) > MAX_IMAGE:
-                raise ValueError('Missing or unsupported image')
+            audiovisual = {'.wav': ('audio', 'audio/wav'), '.mp3': ('audio', 'audio/mpeg'), '.ogg': ('audio', 'audio/ogg'),
+                           '.mp4': ('video', 'video/mp4'), '.webm': ('video', 'video/webm')}.get(path.suffix.lower())
+            if audiovisual:
+                if 'media' in page or not raw or len(raw) > MAX_MEDIA:
+                    raise ValueError('Missing, duplicate or oversized audiovisual asset')
+                kind, media_mime = audiovisual
+                page['media'] = {'kind': kind, 'mime': media_mime, 'sha256': hashlib.sha256(raw).hexdigest(),
+                                 'base64': base64.b64encode(raw).decode('ascii')}
+                continue
+            if not mime or not raw or len(raw) > MAX_IMAGE or 'image' in page:
+                raise ValueError('Missing, duplicate or unsupported image')
             accessibility = atom.get('accessibility', {})
             alt = accessibility.get('alt_text') or page['title']
             page['image'] = {'mime': mime, 'sha256': hashlib.sha256(raw).hexdigest(),
@@ -146,7 +165,7 @@ def project_snapshot(manifest, files, variant_ids):
     bundle_id = required_text(manifest.get('bundle_id'), 'bundle_id')
     version = required_text(manifest.get('version'), 'version')
     title = required_text(manifest.get('title'), 'title')
-    output = {'schema': 1, 'id': bundle_id, 'version': '3' if any(page.get('interaction') == 'reveal' for page in pages) else ('2' if any('image' in page for page in pages) else '1'),
+    output = {'schema': 1, 'id': bundle_id, 'version': '5' if any('media' in page for page in pages) else '3' if any(page.get('interaction') == 'reveal' for page in pages) else ('2' if any('image' in page for page in pages) else '1'),
               'name': f'{title} · ELO {version}', 'pages': pages}
     data = encoded(output)
     fixture(data)  # Enforce exact client text/page/byte limits before any write.

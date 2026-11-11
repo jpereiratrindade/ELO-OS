@@ -94,7 +94,7 @@ def provision(platform, destination, server, credential, ca=None, seed=None, bin
         cache = destination / 'var/lib/elo-client/content'
         library = destination / 'usr/bin'
         startup_content = read_active(seed) if seed else read_active(cache)
-        if startup_content.get('version') != '4' or not startup_content.get('exposure_seconds'):
+        if startup_content.get('version') not in ('4', '5') or not startup_content.get('exposure_seconds'):
             raise ValueError('Pi needs automatic initial content: --seed-content from configured PC cache')
     for path in (config, cache):
         path.mkdir(parents=True, exist_ok=True)

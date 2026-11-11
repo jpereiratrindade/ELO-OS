@@ -5,6 +5,7 @@
 #include <QObject>
 #include <QTimer>
 #include <utility>
+#include <QTemporaryDir>
 class QQuickWindow;
 
 class QtLocalStore final : public elo::LocalStore {
@@ -20,6 +21,7 @@ class JsonCatalog final : public elo::ContentCatalog {
   elo::LoadResult load() override;
  private:
   const elo::LocalStore& store_;
+  QTemporaryDir media_cache_;
 };
 class LinuxNetworkStatus final : public elo::NetworkStatus {
  public:

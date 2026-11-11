@@ -293,6 +293,48 @@ class DistributionTest(unittest.TestCase):
         self.wait(lambda: len(self.frame(health)) == 8 and self.frame(health)[7] == previous_frame)
         self.assertIn(self.frame(health)[5], ('READY_LOCAL', 'DEGRADED_OFFLINE'))
 
+    @unittest.skipUnless(os.environ.get('ELO_AV_TEST') == '1', 'Requires audiovisual-enabled client and ffmpeg')
+    def test_audiovisual_download_and_offline_restart(self):
+        import wave
+        for kind in ('audio', 'video'):
+            with self.subTest(kind=kind):
+                self.cache = self.base / ('cache-' + kind)
+                assets = self.bundle / 'assets'; assets.mkdir(exist_ok=True)
+                asset = assets / ('sample.wav' if kind == 'audio' else 'sample.webm')
+                if kind == 'audio':
+                    with wave.open(str(asset), 'wb') as output:
+                        output.setnchannels(1); output.setsampwidth(2); output.setframerate(16000)
+                        output.writeframes(b'\0\0' * 32000)
+                else:
+                    subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=320x180:r=10:d=2',
+                                    '-c:v', 'libvpx', '-an', '-y', str(asset)], check=True)
+                path = self.bundle / 'catalog/variants/text.json'
+                variant = json.loads(path.read_text()); variant['presentation']['media'] = ['assets/' + asset.name]
+                path.write_bytes(content.encoded(variant))
+                digest = hashlib.sha256()
+                for file in sorted(self.bundle.rglob('*')):
+                    if file.is_file() and file.name != 'manifest.json':
+                        digest.update(file.relative_to(self.bundle).as_posix().encode()); digest.update(file.read_bytes())
+                path = self.bundle / 'manifest.json'; manifest = json.loads(path.read_text())
+                manifest['content_hash'] = 'sha256:' + digest.hexdigest(); path.write_bytes(content.encoded(manifest))
+                port = self.actual_server(tls=True)
+                connection = http.client.HTTPSConnection('localhost', port, context=ssl.create_default_context(cafile=str(self.cert)))
+                connection.request('GET', '/v1/presentation', headers={'Authorization': 'Bearer ' + self.token.decode(),
+                    'X-ELO-Capabilities': 'text-v1,image-v2,reveal-v3,autoplay-v4'})
+                response = connection.getresponse(); self.assertEqual(response.status, 409); response.read(); connection.close()
+                child, health, log = self.launch(port, tls=True)
+                receipt = self.services[-1].receipts
+                self.wait(lambda: receipt.record and receipt.record['presented_sha256'])
+                active = content.read_active(self.cache); self.assertEqual(active['version'], '5')
+                self.assertEqual(active['pages'][0]['media']['kind'], kind)
+                previous = self.frame(health)[7]
+                child.terminate(); child.wait(timeout=5)
+                service = self.services.pop(); service.shutdown(); service.server_close()
+                child, health, log = self.launch(port, tls=True)
+                self.wait(lambda: len(self.frame(health)) == 8 and self.frame(health)[7] == previous)
+                self.assertIn(self.frame(health)[5], ('READY_LOCAL', 'DEGRADED_OFFLINE'))
+                child.terminate(); child.wait(timeout=5)
+
     def test_reveal_capability_and_concealed_offline_restart(self):
         path = self.bundle / 'catalog/variants/text.json'
         variant = json.loads(path.read_text()); variant['interaction'] = 'reveal'

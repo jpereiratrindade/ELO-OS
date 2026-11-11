@@ -39,6 +39,7 @@ function render() {
     const detail=document.createElement('div');const title=document.createElement('strong');title.textContent=variant.title;const id=document.createElement('small');id.textContent=variant.id;const text=document.createElement('p');text.textContent=variant.text;detail.append(title,id,text);
     if(variant.interaction==='reveal'){const tag=document.createElement('span');tag.className='tag';tag.textContent=state.exposure_seconds>0?'Revelação automática':'Toque para revelar';detail.append(tag);}
     if(variant.image){const tag=document.createElement('span');tag.className='tag';tag.textContent='Texto + imagem';detail.append(tag);}
+    if(variant.media){const tag=document.createElement('span');tag.className='tag';tag.textContent=variant.media.kind==='video'?'Vídeo offline':'Áudio offline';detail.append(tag);}
     if(!variant.supported){const tag=document.createElement('span');tag.className='tag';tag.textContent='Requer capacidade ainda não disponível no cliente';detail.append(tag);}
     label.append(check,detail);container.append(label);
   }

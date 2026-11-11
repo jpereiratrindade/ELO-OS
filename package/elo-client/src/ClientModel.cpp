@@ -11,6 +11,8 @@ QString ClientModel::state() const { return text(client_.state_name()); }
 QString ClientModel::title() const { return text(client_.page().title); }
 QString ClientModel::body() const { return text(client_.page().body); }
 QString ClientModel::imageSource() const { return text(client_.page().image_source); }
+QString ClientModel::mediaSource() const { return text(client_.page().media_source); }
+QString ClientModel::mediaKind() const { return text(client_.page().media_kind); }
 QString ClientModel::imageAlt() const { return text(client_.page().image_alt); }
 QString ClientModel::publicationName() const { return text(client_.fixture().name); }
 QString ClientModel::fixtureLabel() const {
@@ -55,7 +57,7 @@ void ClientModel::retry() {
 QByteArray ClientModel::presentationDigest() const {
   QByteArray bytes;
   for (const auto& part : {client_.fixture().id, client_.fixture().version,
-                           client_.page().title, client_.page().body, client_.page().image_hash}) {
+                           client_.page().title, client_.page().body, client_.page().image_hash, client_.page().media_hash}) {
     if (part.empty()) continue;
     bytes.append(part.data(), static_cast<qsizetype>(part.size()));
     bytes.append('\0');
@@ -99,7 +101,9 @@ void ClientModel::confirmPresented(const QByteArray& digest) {
   // Start exposure only after this page's decoded pixels reached a rendered frame.
   if (autoplay() && timed_page_ != pageKey()) {
     timed_page_ = pageKey();
-    exposure_timer_.start(exposureSeconds() * 1000);
+    paused_exposure_ms_ = int(qMax<qint64>(exposureSeconds() * 1000, mediaSource().isEmpty() ? 0 : media_duration_ms_));
+    target_exposure_ms_ = paused_exposure_ms_;
+    if (playback_allowed_) exposure_timer_.start(paused_exposure_ms_);
   }
 }
 
@@ -118,4 +122,32 @@ void ClientModel::advanceAutomatically() {
     client_.reset();
     emit changed();
   }
+}
+
+void ClientModel::setPlaybackAllowed(bool allowed) {
+  if (playback_allowed_ == allowed) return;
+  playback_allowed_ = allowed;
+  if (!allowed && exposure_timer_.isActive()) {
+    paused_exposure_ms_ = exposure_timer_.remainingTime(); exposure_timer_.stop();
+  } else if (allowed && !timed_page_.isEmpty() && paused_exposure_ms_ > 0) {
+    exposure_timer_.start(paused_exposure_ms_);
+  }
+  emit changed();
+}
+void ClientModel::resumePage(int page) {
+  if (!client_.usable() || page < 1 || page > pageCount()) return;
+  while (pageNumber() < page) if (!client_.next()) break;
+  while (pageNumber() > page) if (!client_.previous()) break;
+  emit changed();
+}
+
+void ClientModel::setMediaDuration(qint64 milliseconds) {
+  media_duration_ms_ = qBound<qint64>(qint64(0), milliseconds, qint64(86400000));
+  if (!autoplay() || timed_page_.isEmpty() || mediaSource().isEmpty()) return;
+  const int required = int(qMax<qint64>(exposureSeconds() * 1000, media_duration_ms_));
+  if (required <= target_exposure_ms_) return;
+  const int remaining = exposure_timer_.isActive() ? exposure_timer_.remainingTime() : paused_exposure_ms_;
+  paused_exposure_ms_ = qMax(0, remaining) + required - target_exposure_ms_;
+  target_exposure_ms_ = required;
+  if (playback_allowed_) exposure_timer_.start(paused_exposure_ms_);
 }

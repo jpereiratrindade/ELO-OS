@@ -59,14 +59,18 @@ int main(int argc, char** argv) {
   QNetworkRequest request(endpoint);
   request.setSslConfiguration(tls);
   request.setRawHeader("Authorization", "Bearer " + token);
-  request.setRawHeader("X-ELO-Capabilities", "text-v1,image-v2,reveal-v3,autoplay-v4");
+  QByteArray capabilities("text-v1,image-v2,reveal-v3,autoplay-v4");
+#ifdef ELO_HAS_MULTIMEDIA
+  capabilities += ",audiovisual-v5";
+#endif
+  request.setRawHeader("X-ELO-Capabilities", capabilities);
   request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
   auto* reply = manager.get(request);
   reply->setReadBufferSize(65536);
   qint64 received = 0;
   QObject::connect(reply, &QNetworkReply::readyRead, &app, [&] {
     received += reply->readAll().size();
-    if (received > 16 * 1024 * 1024) reply->abort();
+    if (received > 40 * 1024 * 1024) reply->abort();
   });
   QObject::connect(reply, &QNetworkReply::sslErrors, &app, [&](const QList<QSslError>& errors) {
     for (const auto& error : errors) out << "TLS: " << error.errorString() << '\n';

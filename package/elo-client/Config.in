@@ -14,3 +14,24 @@ config BR2_PACKAGE_ELO_CLIENT
       Distribuição textual HTTPS opcional com cache local e credencial individual.
       Não implementa a totalidade do domínio ELO.
       Exige configuração apropriada da pilha gráfica DRM/KMS.
+
+config BR2_PACKAGE_ELO_CLIENT_MULTIMEDIA
+    bool "elo-client offline audio/video"
+    depends on BR2_PACKAGE_ELO_CLIENT
+    depends on BR2_PACKAGE_QT6MULTIMEDIA
+    depends on BR2_PACKAGE_QT6MULTIMEDIA_FFMPEG
+    help
+      Enable locally cached WAV/MP3/OGG and MP4/WebM playback.
+      Requires a working Qt Multimedia FFmpeg backend and audio output.
+
+config BR2_PACKAGE_ELO_CLIENT_VISION
+    bool "elo-client optional local facial perception"
+    depends on BR2_PACKAGE_ELO_CLIENT
+    depends on BR2_PACKAGE_OPENCV4
+    depends on BR2_PACKAGE_OPENCV4_LIB_DNN
+    depends on BR2_PACKAGE_OPENCV4_LIB_IMGPROC
+    depends on BR2_PACKAGE_OPENCV4_LIB_OBJDETECT
+    depends on BR2_PACKAGE_OPENCV4_LIB_VIDEOIO
+    help
+      Opt-in V4L2 camera presence, orientation and local visit recognition.
+      YuNet/SFace model files must be provisioned separately. No downloads.

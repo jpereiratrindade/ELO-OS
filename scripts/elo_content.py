@@ -12,7 +12,8 @@ import re
 import shutil
 import tempfile
 
-MAX_CONTENT = 8 * 1024 * 1024
+MAX_CONTENT = 32 * 1024 * 1024
+MAX_MEDIA = 8 * 1024 * 1024
 MAX_IMAGE = 2 * 1024 * 1024
 HEX = re.compile(r'[0-9a-f]{64}')
 
@@ -40,10 +41,10 @@ def fixture(data):
     value = decode(data)
     if not isinstance(value, dict) or set(value) not in ({'schema', 'id', 'name', 'version', 'pages'}, {'schema', 'id', 'name', 'version', 'pages', 'exposure_seconds'}):
         raise ValueError('Unsupported fixture fields')
-    if type(value['schema']) is not int or value['schema'] != 1 or value['version'] not in ('1', '2', '3', '4'):
+    if type(value['schema']) is not int or value['schema'] != 1 or value['version'] not in ('1', '2', '3', '4', '5'):
         raise ValueError('Unsupported fixture version')
 
-    if 'exposure_seconds' in value and (value['version'] != '4' or type(value['exposure_seconds']) is not int or not 5 <= value['exposure_seconds'] <= 3600):
+    if 'exposure_seconds' in value and (value['version'] not in ('4', '5') or type(value['exposure_seconds']) is not int or not 5 <= value['exposure_seconds'] <= 3600):
         raise ValueError('Invalid exposure time')
     if value['version'] == '4' and 'exposure_seconds' not in value:
         raise ValueError('Missing exposure time')
@@ -57,14 +58,14 @@ def fixture(data):
     if not isinstance(pages, list) or not 1 <= len(pages) <= 32:
         raise ValueError('Invalid page count')
     for page in pages:
-        if (not isinstance(page, dict) or not {'title', 'body'} <= set(page) or set(page) - {'title', 'body', 'image', 'interaction'}
+        if (not isinstance(page, dict) or not {'title', 'body'} <= set(page) or set(page) - {'title', 'body', 'image', 'interaction', 'media'}
                 or not text(page['title'], 256) or not text(page['body'], 4096)):
             raise ValueError('Invalid page')
-        if 'interaction' in page and (value['version'] not in ('3', '4') or page['interaction'] not in ('none', 'reveal')):
+        if 'interaction' in page and (value['version'] not in ('3', '4', '5') or page['interaction'] not in ('none', 'reveal')):
             raise ValueError('Unsupported interaction')
         if 'image' in page:
             image = page['image']
-            if (value['version'] not in ('2', '3', '4') or not isinstance(image, dict)
+            if (value['version'] not in ('2', '3', '4', '5') or not isinstance(image, dict)
                     or set(image) != {'mime', 'sha256', 'base64', 'alt'}
                     or image['mime'] not in ('image/png', 'image/jpeg')
                     or not text(image['alt'], 512) or not isinstance(image['base64'], str)):
@@ -74,6 +75,23 @@ def fixture(data):
                     or (image['mime'] == 'image/png' and not raw.startswith(b'\x89PNG\r\n\x1a\n'))
                     or (image['mime'] == 'image/jpeg' and not (raw.startswith(b'\xff\xd8') and raw.rstrip(b'\xff\x00').endswith(b'\xff\xd9')))):
                 raise ValueError('Invalid image bytes/hash')
+        if 'media' in page:
+            media = page['media']
+            if (value['version'] != '5' or not isinstance(media, dict)
+                    or set(media) != {'kind', 'mime', 'sha256', 'base64'}
+                    or media['kind'] not in ('audio', 'video')
+                    or media['mime'] not in ({'audio/wav', 'audio/mpeg', 'audio/ogg'} if media['kind'] == 'audio' else {'video/mp4', 'video/webm'})
+                    or not isinstance(media['base64'], str)
+                    or (media['kind'] == 'video' and 'image' in page)):
+                raise ValueError('Invalid audiovisual metadata')
+            raw = base64.b64decode(media['base64'], validate=True)
+            signatures = {'audio/wav': raw.startswith(b'RIFF') and raw[8:12] == b'WAVE',
+                          'audio/mpeg': raw.startswith(b'ID3') or (len(raw) > 1 and raw[0] == 255 and raw[1] & 224 == 224),
+                          'audio/ogg': raw.startswith(b'OggS'),
+                          'video/mp4': raw[4:8] == b'ftyp', 'video/webm': raw.startswith(b'\x1aE\xdf\xa3')}
+            if (not 0 < len(raw) <= MAX_MEDIA or not signatures[media['mime']]
+                    or hashlib.sha256(raw).hexdigest() != media['sha256']):
+                raise ValueError('Invalid audiovisual bytes/hash')
     return value
 
 

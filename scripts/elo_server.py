@@ -41,7 +41,7 @@ def envelope(bundle, variants, exposure_seconds=0):
     if exposure_seconds:
         from elo_content import decode, fixture
         value = decode(data)
-        value.update(version="4", exposure_seconds=exposure_seconds)
+        value.update(version="5" if value["version"] == "5" else "4", exposure_seconds=exposure_seconds)
         data = encoded(value)
         fixture(data)
     return encoded({'schema': 1, 'sha256': hashlib.sha256(data).hexdigest(),
@@ -192,7 +192,8 @@ def server(bundle, variants, token, host='127.0.0.1', port=0, panel=None):
                 required = set()
                 if any('image' in page for page in presentation['pages']): required.add('image-v2')
                 if any(page.get('interaction') == 'reveal' for page in presentation['pages']): required.add('reveal-v3')
-                if presentation['version'] == '4': required.add('autoplay-v4')
+                if presentation.get('exposure_seconds'): required.add('autoplay-v4')
+                if any('media' in page for page in presentation['pages']): required.add('audiovisual-v5')
                 if not required.issubset(self.headers.get('X-ELO-Capabilities', '').split(',')):
                     self.respond(409, b'{"error":"content_capability_required"}')
                     return

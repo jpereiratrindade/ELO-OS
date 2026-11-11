@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "ClientModel.hpp"
+#include "MediaSurface.hpp"
 #include "QtAdapters.hpp"
 #include <QCryptographicHash>
 #include <QFile>
@@ -22,6 +23,7 @@
 class UiTest : public QObject {
   Q_OBJECT
  private slots:
+  void initTestCase() { registerMediaTypes(); }
   void runtimeHealthRequiresRenderedFrames() {
     struct Network : elo::NetworkStatus {
       bool up = true;

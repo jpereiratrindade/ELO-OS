@@ -19,6 +19,9 @@ struct Page {
   std::string image_alt;
   std::string image_hash;
   std::string interaction = "none";
+  std::string media_source;
+  std::string media_kind;
+  std::string media_hash;
   bool operator==(const Page&) const = default;
 };
 struct Fixture {
