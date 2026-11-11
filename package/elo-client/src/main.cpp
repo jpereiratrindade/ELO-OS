@@ -7,6 +7,7 @@
 #include <QDir>
 #include <QDebug>
 #include <QGuiApplication>
+#include <QIcon>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QtQml/qtqml-config.h>
@@ -23,6 +24,7 @@ static_assert(QT_FEATURE_qml_network == 1,
 int main(int argc, char* argv[]) {
   QGuiApplication app(argc, argv);
   QGuiApplication::setApplicationName("elo-client");
+  QGuiApplication::setWindowIcon(QIcon(QStringLiteral(":/elo-os-client.png")));
   QCommandLineParser parser;
   parser.addHelpOption();
   parser.addOption({"fullscreen", "Present in fullscreen."});

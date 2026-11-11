@@ -86,6 +86,18 @@ def main():
         shutil.copyfile(Path(__file__).parent / name, library / name)
     web = library / 'web'
     shutil.copytree(Path(__file__).resolve().parents[1] / 'web/distribution', web, dirs_exist_ok=True)
+    icons = home / '.local/share/icons/hicolor/scalable/apps'
+    icons.mkdir(parents=True, exist_ok=True)
+    for name in ('elo', 'elo-os'):
+        shutil.copyfile(Path(__file__).resolve().parents[1] / 'assets/identity' / (name + '.svg'), icons / (name + '.svg'))
+        (icons / (name + '.svg')).chmod(0o644)
+    applications = home / '.local/share/applications'
+    applications.mkdir(parents=True, exist_ok=True)
+    desktop = applications / 'elo-management.desktop'
+    desktop.write_text('[Desktop Entry]\nType=Application\nName=ELO · Gerenciamento\n'
+        'Comment=Curadoria editorial, distribuição e acompanhamento de totens\n'
+        f'Exec=xdg-open https://localhost:{args.port}/\nIcon=elo\nTerminal=false\nCategories=Education;\n')
+    desktop.chmod(0o644)
     studio = web / 'studio'
     studio.mkdir(exist_ok=True)
     elo = args.elo_root.resolve()
@@ -99,7 +111,9 @@ def main():
     html = html.replace('Plano editorial soberano desacoplado do runtime · C++26 · Raspberry Pi 5',
                         'Conteúdo editorial · publicação para terminais')
     html = html.replace('<div class="header-right">', '<div class="header-right"><a class="distribution-link" href="/">← Distribuição</a>')
-    html = html.replace('</head>', '<link rel="stylesheet" href="/studio/theme.css"></head>')
+    html = html.replace('</head>', '<link rel="icon" type="image/svg+xml" href="/elo.svg"><link rel="stylesheet" href="/studio/theme.css"></head>')
+    if 'aria-label="Princípios de desenvolvimento"' not in html:
+        html = html.replace('</body>', (web / 'principles.html').read_text() + '</body>')
     html = html.replace('Publicar no Totem', 'Publicar versão ELO').replace('Validar Catálogo (C++)', 'Validar catálogo')
     html = html.replace('ESTADO EDITORIAL CONSTITUCIONAL (ELO-ADMIN-001)', 'ESTADO DA PUBLICAÇÃO').replace('ACTIVE (No Totem)', 'PUBLICADA NO ELO')
     html = html.replace('ELO Content Studio · Arquitetura Constitucional ELO-ADMIN-001 & ELO-PUBLISHING-001 · GPL-3.0', 'ELO · Curadoria e distribuição de conteúdo')

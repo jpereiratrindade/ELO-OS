@@ -153,6 +153,9 @@ def server(bundle, variants, token, host='127.0.0.1', port=0, panel=None):
 
         def do_GET(self):
             assets = {'/': ('index.html', 'text/html; charset=utf-8'),
+                      '/elo.svg': ('elo.svg', 'image/svg+xml'),
+                      '/elo-os.svg': ('elo-os.svg', 'image/svg+xml'),
+                      '/elo-os-client.svg': ('elo-os-client.svg', 'image/svg+xml'),
                       '/panel.css': ('panel.css', 'text/css; charset=utf-8'),
                       '/panel.js': ('panel.js', 'text/javascript; charset=utf-8'),
                       '/studio/': ('studio/index.html', 'text/html; charset=utf-8'),

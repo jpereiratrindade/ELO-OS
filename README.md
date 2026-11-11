@@ -1,5 +1,8 @@
 # ELO/OS — Linux embarcado mínimo para ELO Thin Client
 
+> **Simples, leve. Sempre pronto. Sempre incompleto!**
+
+
 > Faça simples. Depois deixe mais leve. **Sempre pronto. Sempre incompleto.**
 
 **Versão de projeto:** `v0.1.0` · **Estado:** console, GUI e fundação de appliance RO + dados persistentes demonstrados em QEMU x86_64/ARM64; boot de console Pi 5 relatado pelo operador · **Hardware:** Raspberry Pi 5, ARM64
@@ -197,3 +200,9 @@ O [plano P1](docs/ELO-OS-IMPL-001_v0.1.1.md), sua [revisão](docs/tests/implemen
 `VERSION` identifica a versão do **projeto**, não a versão de uma imagem executada. As decisões de `docs/adr` têm status explícito; ADR-009 aceita a apresentação local experimental, e as propostas de hardware/produção continuam pendentes. Cada avanço só vira *demonstrado* com evidências e testes.
 
 O código próprio do ELO/OS é licenciado sob **GPL-3.0-only**, conforme decisão do mantenedor em 2026-11-08; o texto integral está em [LICENSE](LICENSE). Kernel, Buildroot, Qt, firmware, toolchains e demais componentes de terceiros preservam suas licenças. O escopo e o inventário inicial estão em [licenças](docs/licenses.md).
+
+## Premissas de desenvolvimento
+
+**Simples, leve. Sempre pronto. Sempre incompleto!**
+
+[Significado e símbolos das premissas](docs/sister-principles/README.md).

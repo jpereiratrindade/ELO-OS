@@ -2,3 +2,13 @@
 
 .terminal-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;margin:20px 0}.terminal-card{border:1px solid #d8e3ee;border-radius:10px;padding:18px;overflow-wrap:anywhere}.terminal-card h3{margin-top:0}.terminal-status{color:#61758b}.terminal-status.recent{color:#087f8c;font-weight:700}.terminal-display{font-weight:600}
 fieldset{border:1px solid var(--line);border-radius:10px;padding:16px 20px;margin:0 0 20px}legend{color:var(--navy);font-size:13px;font-weight:750;padding:0 6px}#terminal-name,input[type=number]{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px 12px;min-width:0}#terminal-name{flex:1}input[type=number]{width:110px}#terminal-form{flex-wrap:wrap}#credential-ready{margin-top:20px;padding:16px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+
+.brand-icon{vertical-align:middle;margin-right:6px}
+
+.elo-principles{margin-top:auto;padding:24px 0 12px;color:#b2cde0;font-family:inherit}
+.elo-principles small{font-size:9px;font-weight:750;letter-spacing:.1em}
+.elo-principles ul{list-style:none;padding:0;margin:12px 0;display:grid;gap:10px}
+.elo-principles li{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;line-height:1.4}
+.elo-principles svg{flex-shrink:0;color:#8cd7ed}
+.elo-principles+.side-note{margin-top:8px}
+@media(max-width:900px){aside .elo-principles{padding:14px 0 0}aside .elo-principles small{display:none}aside .elo-principles ul{display:flex;flex-wrap:wrap;gap:12px 20px;margin:0}aside .elo-principles li{font-size:12px}}

@@ -122,6 +122,16 @@ def provision(platform, destination, server, credential, ca=None, seed=None, bin
     write(library / 'elo-client-supervisor', (ROOT / 'board/elo/qemu-gui/rootfs-overlay/usr/bin/elo-client-supervisor').read_bytes(), 0o755)
     if platform == 'pc':
         write(library / 'elo-client', binary.read_bytes(), 0o755)
+        icon = destination / '.local/share/icons/hicolor/scalable/apps/elo-os-client.svg'
+        icon.parent.mkdir(parents=True, exist_ok=True)
+        (destination / '.local/share/applications').mkdir(parents=True, exist_ok=True)
+        write(icon, (ROOT / 'assets/identity/elo-os-client.svg').read_bytes(), 0o644)
+        desktop = ('[Desktop Entry]\nType=Application\nName=ELO-OS Client\n'
+                   'Comment=Apresentação de conteúdo no terminal ELO\n'
+                   'Exec=systemctl --user start elo-client.service\nIcon=elo-os-client\n'
+                   'Terminal=false\nCategories=Education;\n')
+        write(destination / '.local/share/applications/elo-os-client.desktop', desktop.encode(), 0o644)
+
         launch = ['#!/bin/sh', 'set -eu']
         for key, value in {'ELO_TERMINAL_CONFIG': config, 'ELO_CONTENT_DIR': cache,
                            'ELO_CLIENT_BIN': library / 'elo-client', 'QT_QUICK_BACKEND': 'software'}.items():
