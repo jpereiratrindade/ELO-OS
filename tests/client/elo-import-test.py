@@ -137,6 +137,30 @@ class ImportTest(unittest.TestCase):
         image['sha256'] = '0' * 64
         with self.assertRaises(ValueError): content.fixture(content.encoded(value))
 
+    def test_studio_atom_image_is_inherited_by_text_variant(self):
+        raw = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aDXsAAAAASUVORK5CYII=')
+        self.write('assets/images/atom.png', raw)
+        self.atom.update(modalities={'image': ['assets/images/atom.png']}, accessibility={'alt_text': 'Imagem do átomo'})
+        self.write('catalog/atoms/record.json', content.encoded(self.atom))
+        self.seal()
+        data, _ = importer.project(self.source, ['text-1'])
+        value = content.fixture(data)
+        self.assertEqual(value['version'], '2')
+        self.assertEqual(value['pages'][0]['image']['alt'], 'Imagem do átomo')
+        self.assertEqual(base64.b64decode(value['pages'][0]['image']['base64']), raw)
+        # A variant's explicit image overrides the atom's default, even if that
+        # default is absent, oversized or ambiguous.
+        self.variant['presentation']['media'] = ['assets/images/atom.png']
+        self.atom['modalities']['image'] = ['assets/missing.png', 'assets/other.png']
+        self.write('catalog/variants/text.json', content.encoded(self.variant))
+        self.write('catalog/atoms/record.json', content.encoded(self.atom))
+        self.seal()
+        self.assertIn('image', content.decode(importer.project(self.source, ['text-1'])[0])['pages'][0])
+        self.variant['presentation']['media'] = []
+        self.write('catalog/variants/text.json', content.encoded(self.variant))
+        self.seal()
+        self.rejected()
+
     def test_reveal_projection_and_explicit_format(self):
         self.variant['interaction'] = 'reveal'
         self.write('catalog/variants/text.json', content.encoded(self.variant))

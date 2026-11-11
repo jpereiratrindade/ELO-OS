@@ -87,4 +87,28 @@ nativo isolado registrados na [evidência](../evidence/D2-SERVER-PANEL-20261110.
 
 Continuidade: [confirmações de entrega e correção de ativação](delivery-receipts.md).
 
+Produções externas: [integração Sister-Studio e pré-validação de consumíveis](sister-consumables.md).
+O catálogo editorial continuará no ELO. A recepção autenticada está habilitada
+nesta instalação, com produções em quarentena na aba **Produções Sister-Studio**.
+
+## Publicação de alterações com imagem
+
+Uma versão publicada é imutável. Ao adicionar imagem ou alterar conteúdo de uma
+versão já publicada, o Studio abre **Publicar nova versão**, sugere o próximo patch
+disponível e permite editar o número. Confirmar salva o plano com essa versão e
+publica novamente; Cancelar mantém a versão anterior. Erros de validação não
+disparam incremento automático. O mesmo fluxo atende ao botão superior, à lista
+de aplicações e ao editor. O botão superior usa a aplicação exibida no cabeçalho,
+sem usar inadvertidamente o plano carregado no formulário oculto.
+
+Variantes sem imagem/vídeo próprio herdam a única imagem em `modalities.image`
+do átomo. Uma imagem explícita da variante prevalece; múltiplas imagens padrão
+exigem seleção explícita. Publicar versão editorial continua separado de selecionar
+e distribuir variantes no painel. Clientes precisam declarar `image-v2`.
+
+O instalador adapta as três ações de publicação na cópia do frontend ELO e inclui
+`web/distribution/studio-publishing.js`. Se o frontend de origem mudar essas ações,
+o instalador recusa a adaptação para revisão, em vez de aplicar uma substituição parcial.
+Após atualizar a cópia instalada, recarregue a página com `Ctrl+Shift+R`.
+
 [Capacidade de texto e imagem](image-content.md).

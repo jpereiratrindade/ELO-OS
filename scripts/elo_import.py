@@ -136,6 +136,15 @@ def project_snapshot(manifest, files, variant_ids):
             if not isinstance(audio, list) or not isinstance(video, list) or len(audio) > 1 or len(video) > 1 or (audio and video):
                 raise ValueError('Select one audiovisual asset per atom or variant')
             media = media + audio + video
+        # Studio saves an atom's image in modalities.image. A variant without
+        # its own visual inherits that image, just as it inherits audio/video.
+        # Explicit variant images and video remain authoritative.
+        if isinstance(media, list) and not any(PurePosixPath(str(x)).suffix.lower() in
+                ('.png', '.jpg', '.jpeg', '.webp', '.mp4', '.webm') for x in media):
+            images = modalities.get('image', [])
+            if not isinstance(images, list) or len(images) > 1:
+                raise ValueError('Select one image per atom or variant')
+            media = media + images
         if not isinstance(media, list) or len(media) > 2:
             raise ValueError('At most one image and one audio, or one video per page are supported')
         for reference in media:

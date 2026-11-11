@@ -76,4 +76,12 @@ PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/tests/network/pi5-tools-test.py"
 
 PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/tests/network/panel-test.py"
 
+PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/tests/network/consumable-test.py"
+
+PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/tests/network/ingest-test.py"
+
+if command -v node >/dev/null 2>&1; then
+  node "$ROOT/tests/network/studio-publishing-test.js"
+fi
+
 PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/tests/client/terminal-setup-test.py"

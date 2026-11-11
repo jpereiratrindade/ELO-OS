@@ -11,10 +11,12 @@ import re
 import secrets
 import ssl
 import stat
+import sqlite3
 
 from elo_content import encoded
 from elo_import import project
 from elo_receipts import Receipts
+from elo_ingest import IngestError
 
 
 def terminal_token(path, create=False):
@@ -50,7 +52,10 @@ def envelope(bundle, variants, exposure_seconds=0):
                                'content_hash': source['content_hash'], 'variants': variants}})
 
 
-def server(bundle, variants, token, host='127.0.0.1', port=0, panel=None):
+def server(bundle, variants, token, host='127.0.0.1', port=0, panel=None, ingest=None):
+    if ingest and (hmac.compare_digest(ingest.token, token)
+                   or (panel and hmac.compare_digest(ingest.token, panel.token))):
+        raise ValueError('Ingest, terminal and admin credentials must be distinct')
     receipts = panel.receipts if panel else Receipts()
 
     class Handler(BaseHTTPRequestHandler):
@@ -62,7 +67,7 @@ def server(bundle, variants, token, host='127.0.0.1', port=0, panel=None):
             self.send_header('Content-Type', content_type)
             self.send_header('X-Content-Type-Options', 'nosniff')
             self.send_header('X-Frame-Options', 'DENY')
-            self.send_header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; frame-ancestors 'none'; base-uri 'none'")
+            self.send_header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self'; frame-ancestors 'none'; base-uri 'none'")
             self.send_header('Content-Length', str(len(body)))
             self.send_header('Cache-Control', 'no-store')
             for name, value in extra_headers:
@@ -100,6 +105,19 @@ def server(bundle, variants, token, host='127.0.0.1', port=0, panel=None):
                     raise ValueError('Requisição incompleta')
                 if self.path == '/manage/status' and method == 'GET':
                     self.respond(200, encoded(panel.status()), extra_headers=[('Set-Cookie', 'elo_media=' + panel.media_cookie() + '; Path=/studio/assets/; HttpOnly; SameSite=Strict' + ('; Secure' if scheme == 'https' else ''))])
+                elif self.path == '/manage/ingest' and method == 'GET':
+                    self.respond(200, encoded(ingest.summaries()) if ingest else b'{"enabled":false}')
+                elif self.path == '/manage/ingest/import' and method == 'POST':
+                    from elo_content import decode
+                    if not ingest:
+                        raise IngestError(503, 'ingest_disabled')
+                    if size > 12 * 1024 * 1024:
+                        raise IngestError(413, 'request_too_large')
+                    self.respond(200, encoded(ingest.import_package(decode(body))))
+                elif re.fullmatch(r'/manage/ingest/(sub_[0-9a-f]{32})/audio', self.path) and method == 'GET':
+                    if not ingest:
+                        raise IngestError(503, 'ingest_disabled')
+                    self.respond(200, ingest.audio(self.path.split('/')[3]), 'audio/wav')
                 elif self.path == '/manage/delivery' and method == 'GET':
                     self.respond(200, encoded(panel.delivery()))
                 elif self.path == '/manage/terminals' and method == 'GET':
@@ -122,12 +140,87 @@ def server(bundle, variants, token, host='127.0.0.1', port=0, panel=None):
                     self.respond(status, data, mime)
                 else:
                     self.respond(404, b'{"error":"not_found"}')
+            except IngestError as error:
+                self.respond(error.status, encoded({'error': error.code}))
             except (OSError, ValueError, UnicodeError):
                 self.respond(400, encoded({'error': 'Operação recusada. Confira publicação, seleção e disponibilidade do Estúdio.'}))
             except Exception:
                 self.respond(502, b'{"error":"editorial_service_unavailable"}')
 
+        def ingest_request(self, method):
+            from elo_ingest import IngestError
+            from elo_consumable import MAX_MANIFEST
+            from elo_content import decode
+            if not ingest:
+                self.respond(404, b'{"error":"ingest_disabled"}')
+                return
+            if not self.authorized(ingest.token):
+                self.respond(401, b'{"error":"unauthorized"}')
+                return
+            # Machine-to-machine only; browser sessions must use editorial routes.
+            if self.headers.get_all('Origin'):
+                self.respond(403, b'{"error":"origin_rejected"}')
+                return
+            try:
+                lengths = self.headers.get_all('Content-Length', [])
+                if not lengths and method == 'GET':
+                    lengths = ['0']
+                if self.headers.get_all('Transfer-Encoding') or len(lengths) != 1 or not re.fullmatch(r'[0-9]{1,10}', lengths[0]):
+                    raise IngestError(400, 'invalid_content_length')
+                size = int(lengths[0])
+                base = '/v1/ingest/submissions'
+                limit = 0
+                asset = None
+                upload = re.fullmatch(base + r'/(sub_[0-9a-f]{32})/assets/([A-Za-z0-9][A-Za-z0-9_-]{0,127})', self.path)
+                item = re.fullmatch(base + r'/(sub_[0-9a-f]{32})(/commit)?', self.path)
+                if self.path == base and method == 'POST':
+                    limit = MAX_MANIFEST
+                    if self.headers.get_all('Content-Type') != ['application/json']:
+                        raise IngestError(415, 'unsupported_content_type')
+                    keys = self.headers.get_all('Idempotency-Key', [])
+                    if len(keys) != 1:
+                        raise IngestError(400, 'invalid_idempotency_key')
+                elif upload and method == 'PUT':
+                    asset = ingest.asset_spec(*upload.groups())
+                    limit = asset['size_bytes']
+                    if self.headers.get_all('Content-Type') != [asset['mime']]:
+                        raise IngestError(415, 'unsupported_content_type')
+                    if size != limit:
+                        raise IngestError(422, 'asset_size_mismatch')
+                elif not (item and ((method == 'GET' and not item[2])
+                                            or (method == 'POST' and item[2] == '/commit'))):
+                    raise IngestError(404, 'not_found')
+                if size > limit:
+                    raise IngestError(413, 'request_too_large')
+                raw = self.rfile.read(size)
+                if len(raw) != size:
+                    raise IngestError(400, 'incomplete_request')
+                status = 200
+                if self.path == base:
+                    try:
+                        value = decode(raw)
+                    except (ValueError, UnicodeError):
+                        raise IngestError(422, 'invalid_manifest') from None
+                    receipt, created = ingest.create(value, keys[0])
+                    status = 201 if created else 200
+                elif asset is not None:
+                    receipt = ingest.upload(*upload.groups(), raw)
+                elif item[2]:
+                    receipt = ingest.commit(item[1])
+                else:
+                    receipt = ingest.get(item[1])
+                self.respond(status, encoded(receipt))
+            except IngestError as error:
+                self.respond(error.status, encoded({'error': error.code}))
+            except (ValueError, UnicodeError):
+                self.respond(422, b'{"error":"invalid_package"}')
+            except (OSError, sqlite3.Error):
+                self.respond(503, b'{"error":"intake_unavailable"}')
+
         def do_POST(self):
+            if self.path.startswith('/v1/ingest/'):
+                self.ingest_request('POST')
+                return
             if self.path == '/v1/receipt':
                 identity = self.terminal_identity()
                 if not identity:
@@ -146,12 +239,21 @@ def server(bundle, variants, token, host='127.0.0.1', port=0, panel=None):
             self.admin_request('POST')
 
         def do_PUT(self):
+            if self.path.startswith('/v1/ingest/'):
+                self.ingest_request('PUT')
+                return
             self.admin_request('PUT')
 
         def do_DELETE(self):
+            if self.path.startswith('/v1/ingest/'):
+                self.ingest_request('DELETE')
+                return
             self.admin_request('DELETE')
 
         def do_GET(self):
+            if self.path.startswith('/v1/ingest/'):
+                self.ingest_request('GET')
+                return
             assets = {'/': ('index.html', 'text/html; charset=utf-8'),
                       '/elo.svg': ('elo.svg', 'image/svg+xml'),
                       '/elo-os.svg': ('elo-os.svg', 'image/svg+xml'),
@@ -162,8 +264,9 @@ def server(bundle, variants, token, host='127.0.0.1', port=0, panel=None):
                       '/studio/app.css': ('studio/app.css', 'text/css; charset=utf-8'),
                       '/studio/theme.css': ('studio-morfo.css', 'text/css; charset=utf-8'),
                       '/studio/app.js': ('studio/app.js', 'text/javascript; charset=utf-8')}
-            if panel and self.path in assets:
-                filename, mime = assets[self.path]
+            static_path = self.path.split('?', 1)[0]
+            if panel and static_path in assets:
+                filename, mime = assets[static_path]
                 self.respond(200, (panel.web_root / filename).read_bytes(), mime)
                 return
             if panel and self.path.startswith('/studio/assets/'):
@@ -229,6 +332,9 @@ def main():
     parser.add_argument('--selection-file', type=Path)
     parser.add_argument('--web-root', type=Path)
     parser.add_argument('--studio-port', type=int, default=18080)
+    parser.add_argument('--ingest-token-file', type=Path, help='Dedicated existing consumable:submit credential')
+    parser.add_argument('--ingest-root', type=Path, help='Private intake spool; never the ELO editorial workspace')
+    parser.add_argument('--ingest-producer', help='Operator-assigned producer instance identity')
     args = parser.parse_args()
     try:
         insecure = args.allow_loopback_http
@@ -247,7 +353,14 @@ def main():
             if hmac.compare_digest(admin_token, token):
                 raise ValueError('Admin and terminal credentials must be distinct')
             panel = Panel(args.bundle, args.variant, admin_token, args.selection_file, args.web_root, args.studio_port)
-        service = server(args.bundle, args.variant, token, args.host, args.port, panel=panel)
+        ingest = None
+        ingest_options = (args.ingest_token_file, args.ingest_root, args.ingest_producer)
+        if any(ingest_options):
+            if not all(ingest_options):
+                raise ValueError('Ingest requires token file, private spool and producer identity')
+            from elo_ingest import Ingest
+            ingest = Ingest(args.ingest_root, terminal_token(args.ingest_token_file), args.ingest_producer)
+        service = server(args.bundle, args.variant, token, args.host, args.port, panel=panel, ingest=ingest)
         if not insecure:
             context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
             context.minimum_version = ssl.TLSVersion.TLSv1_2

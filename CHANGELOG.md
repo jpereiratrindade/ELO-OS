@@ -2,6 +2,13 @@
 
 ## [Unreleased] — desenvolvimento após o scaffold
 
+- 2026-11-11: fluxo manual visível nos dois Studios: exportação C++ de pacote instrumental no Sister-Studio, aba Produções Sister-Studio no ELO, importação autenticada e prévia privada de áudio. Recepção instalada habilitada com credencial dedicada. Fluxo de arquivo, sem sincronização automática ou catalogação editorial; Firefox e roundtrip com binário Sister real aprovados.
+
+- 2026-11-11: recepção opt-in de consumíveis com credencial dedicada, identidade por instalação, staging persistente, idempotência, cotas e recibos de quarentena; cliente HTTPS de envio explícito e testes reais HTTP/TLS. Aceitação/catalogação ELO permanece pendente.
+- 2026-11-11: Studio permite resolver conflito de versão imutável pela tela e publicar nova versão; botão superior usa a aplicação exibida. Projeção herda a imagem do átomo quando a variante não define visual. Ensaio com backend ELO real confirmou upload, publicação 0.1.1, preservação de 0.1.0 e leitura do cache sem backend.
+
+- 2026-11-11: incorporado ELO-SISTER-BASES-001 sem alterações; ADR-011 adota fronteiras produtor/editorial/distribuição. Primeiro incremento: Schema e pré-validador local PCM WAV com testes negativos; ingestão HTTP, catálogo ELO e ensaio integrado permanecem pendentes.
+
 - 2026-11-09: desktop Silverblue 44 preparado com Toolbox `elo-os`; builds gráficos com 32 jobs e dois cenários por arquitetura aprovados (x86_64/KVM, ARM64/TCG), incluindo tela/teclado, queda/reconexão e SIGKILL/SIGSTOP. Núcleo ARM64 aprovado em C++23 e no subconjunto experimental C++26; cliente nativo também testado na sessão Fedora por QPA xcb. Harness offline corrigido para aceitar `sit0` inativo e verificar NICs ligadas a dispositivos/rotas. Evidências `P2-DESKTOP-{X86,AARCH64}-20261109.md`; Pi 5 físico pendente.
 - Diagnóstico do host agora verifica módulos Perl básicos e `Time::Piece` quando a configuração exige OpenSSL, antecipando falha encontrada no build ARM64. Dependências e caminhos da Toolbox documentados.
 - T-203/T-205: portas explícitas e adaptadores Linux/Qt para conteúdo, link local, relógio, frames e diagnósticos; conectividade observável e retry de falha recuperável. Contratos nativos C++23/Qt passaram no desktop em 2026-11-09.

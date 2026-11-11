@@ -60,6 +60,7 @@ class PanelTest(unittest.TestCase):
 
     def test_public_landing_and_admin_auth_separation(self):
         self.assertEqual(self.request('/', token=None)[0], 200)
+        self.assertEqual(self.request('/panel.js?v=release-test', token=None)[0], 200)
         self.assertEqual(self.request('/manage/status', token=None)[0], 401)
         self.assertEqual(self.request('/manage/status', token=b't' * 43)[0], 401)
         self.assertEqual(self.request('/v1/presentation', token=b'a' * 43)[0], 401)

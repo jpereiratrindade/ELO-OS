@@ -18,6 +18,11 @@ O ELO/OS é uma árvore `br2-external` do Buildroot para compor uma distribuiç�
 
 ## Árvore
 
+Integração em evolução: [Sister-Studio → ELO → ELO-OS](docs/client/sister-consumables.md),
+com exportação manual de composições no Sister-Studio e recepção na aba
+**Produções Sister-Studio** do ELO Studio. Inclui pré-validação PCM WAV,
+recepção autenticada em quarentena e cliente de envio HTTPS.
+
 - `docs/`: constituição e ADRs versionados; critérios de aceitação.
 - `configs/`: perfis de console, gráficos P2, appliances virtuais e Pi 5 experimental com cliente/Wi-Fi.
 - `board/elo/common/`: arquivos compartilhados; `board/elo/<perfil>/`: identidade e ajustes por plataforma.

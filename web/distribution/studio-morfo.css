@@ -14,3 +14,5 @@
 
 .elo-principles{margin:24px auto;padding:18px 24px;max-width:1400px;color:var(--text-muted);border-top:1px solid var(--border-subtle)}
 .elo-principles ul{display:flex;flex-wrap:wrap;gap:14px 28px}.elo-principles svg{color:var(--accent-cyan)}
+
+.sister-intake-panel{padding:20px;margin:16px 0;background:#fff;border:1px solid #dce7ef;border-radius:14px}.sister-intake-panel h4{margin:0 0 12px}.sister-intake-panel p{color:#64788a;line-height:1.6}.sister-intake-panel form{display:flex;align-items:center;flex-wrap:wrap;gap:14px}.sister-intake-panel audio{max-width:100%}.sister-intake-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Manual Sister-Studio export package v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "manifest", "asset_base64"],
+  "properties": {
+    "schema": {"const": "elo-consumable-package/v1"},
+    "manifest": {"$ref": "elo-consumable-ingest-v1.schema.json"},
+    "asset_base64": {
+      "type": "string",
+      "minLength": 4,
+      "maxLength": 11184812,
+      "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+    }
+  }
+}
