@@ -216,7 +216,7 @@ Window {
             textFormat: Text.PlainText
             anchors.left: parent.left
             anchors.bottom: parent.bottom
-            text: clientModel.autoplay ? "ELO · " + clientModel.pageNumber + " / " + clientModel.pageCount + " · " + clientModel.exposureSeconds + " s" : clientModel.state + " · " + clientModel.fixtureLabel + "\n" + clientModel.connectivity + (clientModel.contentUpdate.length > 0 ? "\n" + clientModel.contentUpdate : "") + "\nNo seu tempo. Sem conexão necessária."
+            text: (clientModel.autoplay ? "ELO · " + clientModel.pageNumber + " / " + clientModel.pageCount + " · " + clientModel.exposureSeconds + " s" : clientModel.state + " · " + clientModel.fixtureLabel + "\n" + clientModel.connectivity + (clientModel.contentUpdate.length > 0 ? "\n" + clientModel.contentUpdate : "") + "\nNo seu tempo. Sem conexão necessária.") + "\nSimples, leve. Sempre pronto. Sempre incompleto!"
             color: Theme.muted
             font.family: window.uiFont
             font.pixelSize: 15
