@@ -6,4 +6,6 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 : "${BINARIES_DIR:?Buildroot image directory required}"
 install -D -m 0644 "$ROOT/board/elo/pi5-client/cmdline.txt" "$BINARIES_DIR/rpi-firmware/cmdline.txt"
 install -D -m 0644 "$ROOT/board/elo/pi5-client/config.txt" "$BINARIES_DIR/rpi-firmware/config.txt"
-python3 "$ROOT/scripts/pi5-image-variant.py" "$1"
+if [[ -n "${1:-}" && -n "${BR2_CONFIG:-}" ]]; then
+    python3 "$ROOT/scripts/pi5-image-variant.py" "$1"
+fi

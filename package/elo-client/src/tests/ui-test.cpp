@@ -86,12 +86,15 @@ class UiTest : public QObject {
     QVERIFY(experience && card);
     for (const auto& size : {QSize(1024, 640), QSize(640, 480), QSize(1920, 1080)}) {
       window->resize(size);
-      QCoreApplication::processEvents();
+      QTRY_VERIFY(window->size() == size);
+      QTRY_VERIFY(preview->mapRectToScene(preview->boundingRect()).right() <= window->width());
+      QTRY_VERIFY(window->width() - preview->mapRectToScene(preview->boundingRect()).right() <= 24);
+      QTRY_VERIFY(window->width() - preview->mapRectToScene(preview->boundingRect()).right() >= 0);
       const auto box = preview->mapRectToScene(preview->boundingRect());
-      QVERIFY(window->width() - box.right() <= 24); QVERIFY(box.top() <= 24);
-      QVERIFY(box.right() <= window->width()); QVERIFY(box.top() >= 0);
-      QVERIFY(experience->mapToScene(QPointF()).y() > box.bottom());
-      QVERIFY(card->width() >= window->width() * 0.95);
+      QVERIFY(box.top() <= 24);
+      QVERIFY(box.top() >= 0);
+      QTRY_VERIFY(experience->mapToScene(QPointF()).y() > box.bottom());
+      QTRY_VERIFY(card->width() >= window->width() * 0.95);
       QTRY_VERIFY2(card->height() >= window->height() * 0.55,
                    qPrintable(QString("window=%1x%2 card=%3x%4 y=%5 autoplay=%6").arg(window->width()).arg(window->height()).arg(card->width()).arg(card->height()).arg(card->y()).arg(model.autoplay())));
     }

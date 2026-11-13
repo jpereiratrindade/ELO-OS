@@ -22,6 +22,11 @@ fi
 case "$VARIANT" in basic|vision) ;; *) echo 'Variante inválida.' >&2; exit 2 ;; esac
 IMAGE_DIR="$ROOT/output/pi5-client-variants/$VARIANT"
 IMAGE="$IMAGE_DIR/sdcard.img"
+if [[ ! -f "$IMAGE_DIR/manifest.json" || ! -f "$IMAGE" ]]; then
+    echo "Imagem da variante '$VARIANT' não encontrada em $IMAGE_DIR." >&2
+    echo "Certifique-se de montar/gerar a variante antes da instalação." >&2
+    exit 1
+fi
 EXPECTED_SHA=$(python3 - "$IMAGE_DIR/manifest.json" "$VARIANT" <<'PYMETA'
 import json,re,sys
 value=json.load(open(sys.argv[1]))
