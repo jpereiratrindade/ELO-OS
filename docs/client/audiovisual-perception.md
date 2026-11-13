@@ -127,9 +127,28 @@ OpenCV core/imgproc/objdetect/videoio/dnn. O núcleo textual continua independen
 
 No Buildroot, habilite os recursos opcionais de `elo-client` depois de
 configurar Qt Multimedia/FFmpeg e os módulos OpenCV correspondentes.
-Nenhuma imagem Pi foi recompilada nesta etapa. Reprodução, áudio físico,
+Na etapa inicial de 2026-11-11, nenhuma imagem Pi foi recompilada. Reprodução, áudio físico,
 desempenho térmico, câmera e consentimento no painel Pi precisam de validação
 física; testes na workstation não demonstram esse funcionamento.
+
+### Câmera USB no perfil Pi 5
+
+O perfil `pi5-client` agora habilita `ELO_CLIENT_VISION` e OpenCV com V4L2.
+Multimídia continua sendo uma opção independente. Para ativar a câmera em um
+terminal, instale os dois modelos ONNX de hashes listados acima em
+`/usr/share/elo-client/models/` e grave `/dev/video0` no arquivo
+`/etc/elo-terminal/camera.device`. Não são baixados modelos no boot.
+
+O lançador carrega `uvcvideo` antes de iniciar o cliente, configura a prévia e
+usa `/var/lib/elo-client/private/visits.json` para cadastros voluntários.
+Remover `camera.device` desativa a câmera na próxima partida do cliente.
+Reconhecimento exige adesão na interface; ativar câmera não autoriza cadastro.
+O comando `/etc/init.d/S50elo-client restart` reaplica a configuração.
+
+Em 2026-11-12, o cliente ARM64 com visão foi instalado por SSH no Pi 5.
+A câmera USB `0c45:64ab` passou na captura de frames e no processamento do
+detector; o cliente instalado abriu `/dev/video0` e manteve a renderização.
+[Evidência e limites do ensaio](../evidence/PI5-USB-CAMERA-20261112.md).
 
 ## Validação reproduzível
 

@@ -1,0 +1,26 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-only
+# Power control stays independent of the presentation process.
+set -eu
+pidfile=/run/elo-control.pid
+case "${1:-}" in
+  start)
+    [ -s /etc/elo-terminal/server.url ] || exit 0
+    [ -s /etc/elo-terminal/terminal.token ] || exit 0
+    if [ -s "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then exit 0; fi
+    start-stop-daemon -S -b -m -p "$pidfile" -O /run/elo-control.log -x /usr/bin/elo-control-agent
+    ;;
+  stop)
+    if [ -s "$pidfile" ]; then
+      start-stop-daemon -K -p "$pidfile" || :
+      for attempt in 1 2 3 4 5; do
+        if ! kill -0 "$(cat "$pidfile")" 2>/dev/null; then rm -f "$pidfile"; exit 0; fi
+        sleep 1
+      done
+      echo 'Agente de manutenção não parou' >&2
+      exit 1
+    fi
+    ;;
+  restart) "$0" stop; "$0" start ;;
+  *) echo "Usage: $0 {start|stop|restart}" >&2; exit 2 ;;
+esac

@@ -4,6 +4,7 @@ VERSION=2026.08.1
 GRAPHICS=0
 APPLIANCE=0
 case "$PROFILE" in
+  pi5-client-vision) DEFCONFIG=elo_pi5_client_vision_defconfig; ARCH=aarch64; KERNEL=Image; artifacts=(sdcard.img); CONSOLE=ttyAMA10; GRAPHICS=1 ;;
   pi5-client) DEFCONFIG=elo_pi5_client_defconfig; ARCH=aarch64; KERNEL=Image; artifacts=(sdcard.img); CONSOLE=ttyAMA10; GRAPHICS=1 ;;
   pi5) DEFCONFIG=elo_pi5_defconfig; ARCH=aarch64; KERNEL=Image; artifacts=(sdcard.img); CONSOLE=ttyAMA10 ;;
   qemu-x86_64) DEFCONFIG=elo_qemu_x86_64_defconfig; ARCH=x86_64; KERNEL=bzImage; artifacts=(bzImage rootfs.ext4); CONSOLE=ttyS0 ;;

@@ -36,6 +36,38 @@ original do PC continua gerenciada pela instalação existente e não é revogad
 Todos recebem seleção editorial compartilhada nesta etapa. Distribuição específica por
 aparelho ou grupo ainda não foi implementada.
 
+## Reiniciar e desligar
+
+Totens Raspberry Pi com `elo-control-agent` ativo mostram **Reiniciar** e **Desligar**
+no próprio cartão. As ações exigem a sessão administrativa do painel e confirmação
+com o nome do aparelho. Desligar exige ligar novamente no aparelho; o painel não
+oferece ligação remota. Clientes sem agente, como o PC desta bancada, não mostram
+esses controles. Sem contato de manutenção há mais de 30 segundos, ficam desabilitados.
+
+O serviço `/etc/init.d/S51elo-control` funciona independentemente do cliente gráfico,
+consulta o servidor por HTTPS a cada cinco segundos e usa a credencial individual e
+CA de `/etc/elo-terminal`. Não recebe chave administrativa nem abre uma nova porta.
+O executável de produção exige root e hardware Raspberry Pi, e só pode chamar
+`/sbin/reboot` ou `/sbin/poweroff`, sem comandos de shell enviados pelo servidor.
+
+Cada solicitação vale 120 segundos, fica vinculada à identidade e à inicialização
+atual do aparelho e é persistida em `state/control.json` no servidor. Somente uma
+solicitação pode ficar em andamento por totem. Revogação cancela solicitações ainda
+pendentes. Uma solicitação expirada não é entregue após reconexão.
+
+O agente registra o identificador em `/var/lib/elo-control/consumed.json` antes de
+confirmar recebimento ao servidor. Somente após resposta HTTPS válida executa a ação.
+O registro privado impede repetir os últimos 128 comandos após reinício ou reentrega.
+Falha de confirmação recusa a ação e exige nova solicitação administrativa.
+
+O painel distingue espera, recebimento, falha, expiração e nova inicialização observada.
+Recebimento não comprova desligamento físico; ausência de contato tampouco comprova
+desligamento. **Totem conectado após reinicialização** significa que o agente informou
+uma nova inicialização dentro do intervalo de observação, sem provar a causa.
+
+Testes isolados e instalação operacional estão registrados na
+[evidência de controle de energia](../evidence/PI5-POWER-CONTROL-20261112.md).
+
 ## Persistência e validação
 
 Cadastro privado em `state/terminals.json`; relatórios individuais em

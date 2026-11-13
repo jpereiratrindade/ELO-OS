@@ -67,8 +67,8 @@ function renderTerminals(terminals) {
   for(const terminal of terminals){
     const card=document.createElement('article');card.className='terminal-card';card.dataset.terminalId=terminal.id;
     const name=document.createElement('h3');name.textContent=terminal.name;
-    const connection=document.createElement('p');connection.className='terminal-status'+(terminal.recent&&!terminal.revoked?' recent':'');
-    connection.textContent=terminal.revoked?'Credencial revogada':terminal.recent?'Contato recente':terminal.last_seen?'Sem comunicação recente':'Aguardando primeira comunicação';
+    const connection=document.createElement('p');connection.className='terminal-status'+(terminal.recent&&!terminal.revoked?' recent':(terminal.last_seen?' stale':''));
+    connection.textContent=terminal.revoked?'Credencial revogada':terminal.recent?'Contato recente':terminal.downtime_label?`Sem contato recente (há ${terminal.downtime_label})`:terminal.last_seen?'Sem comunicação recente':'Aguardando primeira comunicação';
     const delivery=document.createElement('p');delivery.textContent=terminal.label;
     const display=document.createElement('p');display.className='terminal-display';
     const shown=terminal.display;
@@ -76,6 +76,67 @@ function renderTerminals(terminals) {
     const mode=document.createElement('p');mode.className='hint';mode.textContent=shown?(shown.mode==='automatic'?`Sequência automática · ${shown.exposure_seconds} s por página`:'Navegação manual'):'';
     const seen=document.createElement('p');seen.className='hint';seen.textContent=terminal.last_seen?`Último contato: ${new Date(terminal.last_seen*1000).toLocaleString('pt-BR')}`:'Sem contato registrado.';
     card.append(name,connection,display,mode,delivery,seen);
+    if(terminal.telemetry){
+      const tele=terminal.telemetry;
+      const teleDiv=document.createElement('div');teleDiv.className='terminal-telemetry';
+      const items=[];
+      if(tele.cpu_temp_c!==null&&tele.cpu_temp_c!==undefined){
+        const isHot=tele.cpu_temp_c>=75;
+        items.push(`<span class="tele-item${isHot?' alert':''}">🌡️ ${tele.cpu_temp_c}°C</span>`);
+      }
+      if(tele.voltage_v!==null&&tele.voltage_v!==undefined){
+        const isLow=tele.voltage_v<4.75||tele.under_voltage;
+        items.push(`<span class="tele-item${isLow?' alert':''}">⚡ ${tele.voltage_v}V${tele.under_voltage?' (subtensão!)':''}</span>`);
+      } else if(tele.under_voltage){
+        items.push(`<span class="tele-item alert">⚡ Subtensão detectada!</span>`);
+      }
+      if(tele.cpu_load_1m!==null&&tele.cpu_load_1m!==undefined){
+        items.push(`<span class="tele-item">⚙️ Carga: ${tele.cpu_load_1m}</span>`);
+      }
+      if(tele.memory_free_mb!==null&&tele.memory_free_mb!==undefined){
+        const ramGb=(tele.memory_free_mb/1024).toFixed(1);
+        items.push(`<span class="tele-item">🧠 RAM: ${ramGb}GB</span>`);
+      }
+      if(items.length){
+        teleDiv.innerHTML='<small class="tele-label">SAÚDE DO HARDWARE (TEMPO REAL)</small><div class="tele-row">'+items.join('')+'</div>';
+        card.append(teleDiv);
+      }
+    }
+    if(terminal.events&&terminal.events.length){
+      const history=document.createElement('div');history.className='terminal-history';
+      const hTitle=document.createElement('h4');hTitle.textContent='Histórico de conectividade';
+      const list=document.createElement('ul');list.className='terminal-events-list';
+      for(const ev of [...terminal.events].reverse().slice(0,5)){
+        const li=document.createElement('li');li.className=ev.type||'';
+        const timeStr=new Date(ev.time*1000).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+        li.textContent=`${timeStr} · ${ev.label}`;
+        list.append(li);
+      }
+      history.append(hTitle,list);
+      card.append(history);
+    }
+    if(terminal.control?.supported&&!terminal.revoked){
+      const control=terminal.control;
+      const note=document.createElement('p');note.className='hint terminal-control-status';note.setAttribute('aria-live','polite');
+      const labels={pending:'Aguardando recebimento do comando pelo totem.',accepted:'Comando recebido pelo totem. Aguardando execução.',reboot_observed:'Totem conectado após reinicialização.',expired:'Prazo encerrado: comando não recebido.',unconfirmed:'Comando recebido; execução não confirmada.',failed:'O totem não conseguiu executar o comando.',cancelled:'Comando cancelado após mudança de inicialização ou revogação.'};
+      note.textContent=control.command?`${control.command.action==='reboot'?'Reiniciar':'Desligar'} · ${labels[control.command.state]||'Estado desconhecido'}`:control.available?'Manutenção disponível':'Manutenção sem contato recente';
+      const actions=document.createElement('div');actions.className='terminal-actions';
+      for(const [action,label] of [['reboot','Reiniciar'],['poweroff','Desligar']]){
+        const button=document.createElement('button');button.type='button';button.textContent=label;button.className=action==='poweroff'?'danger':'';
+        button.disabled=!control.available||control.busy;button.setAttribute('aria-label',`${label} ${terminal.name}`);
+        button.addEventListener('click',async()=>{
+          const detail=action==='poweroff'?'Será necessário ligar o aparelho fisicamente para voltar a usá-lo.':'A apresentação será interrompida durante a reinicialização.';
+          if(!window.confirm(`${label} “${terminal.name}”?\n\n${detail}`))return;
+          for(const sibling of actions.querySelectorAll('button'))sibling.disabled=true;
+          try{
+            await api(`/manage/terminals/${terminal.id}/power`,{method:'POST',body:JSON.stringify({action,request_id:crypto.randomUUID()})});
+            renderTerminals(await api('/manage/terminals'));message(`${label}: solicitação enviada para ${terminal.name}.`);
+          }catch(error){message(error.message,true);try{renderTerminals(await api('/manage/terminals'));}catch{}}
+        });
+        actions.append(button);
+      }
+      card.append(note,actions);
+    }
     if(terminal.id!=='local'&&!terminal.revoked){
       const revoke=document.createElement('button');revoke.type='button';revoke.textContent='Revogar credencial';
       revoke.addEventListener('click',async()=>{revoke.disabled=true;try{await api(`/manage/terminals/${terminal.id}/revoke`,{method:'POST'});renderTerminals(await api('/manage/terminals'));message('Credencial revogada. Cópia offline permanece no aparelho.');}catch(error){message(error.message,true);revoke.disabled=false;}});

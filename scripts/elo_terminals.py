@@ -10,6 +10,7 @@ import tempfile
 import threading
 from elo_content import decode, encoded, sync_dir
 from elo_receipts import Receipts
+from elo_control import Control
 
 
 class Terminals:
@@ -19,6 +20,7 @@ class Terminals:
         self.lock = threading.RLock()
         self.items = decode(self.path.read_bytes()) if self.path.exists() else {}
         self.reports = {}
+        self.control = Control(self.path.parent / 'control.json')
 
     def save(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -63,10 +65,18 @@ class Terminals:
             if identity not in self.items: raise ValueError('Unknown terminal')
             self.items[identity]['revoked'] = True
             self.save()
+            self.control.cancel(identity)
         return {'revoked': True}
+
+    def power(self, identity, value):
+        with self.lock:
+            if identity not in self.items or self.items[identity]['revoked']:
+                raise ValueError('Totem desconhecido ou revogado')
+            return self.control.request(identity, value)
 
     def status(self, expected):
         with self.lock:
             items = {'local': {'name': 'PC de testes', 'revoked': False}, **self.items}
             return [dict(id=identity, name=item['name'], revoked=item['revoked'],
+                         control=self.control.status(identity),
                          **self.receipt(identity).status(expected)) for identity, item in items.items()]

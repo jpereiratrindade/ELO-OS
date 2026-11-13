@@ -59,6 +59,21 @@ def server(bundle, variants, token, host='127.0.0.1', port=0, panel=None, ingest
     receipts = panel.receipts if panel else Receipts()
 
     class Handler(BaseHTTPRequestHandler):
+        def setup(self):
+            self.connection = self.request
+            if getattr(self.server, 'ssl_context', None):
+                self.connection.settimeout(10)
+                try:
+                    self.connection = self.server.ssl_context.wrap_socket(self.connection, server_side=True)
+                except (ssl.SSLError, TimeoutError, OSError):
+                    import io
+                    self.rfile = io.BytesIO()
+                    self.wfile = io.BytesIO()
+                    self.close_connection = True
+                    return
+                self.request = self.connection
+            super().setup()
+
         def log_message(self, format, *args):
             pass  # Never log request headers, token, query or content.
 
@@ -90,7 +105,7 @@ def server(bundle, variants, token, host='127.0.0.1', port=0, panel=None, ingest
             if not panel or not self.authorized(panel.token):
                 self.respond(401, b'{"error":"unauthorized"}')
                 return
-            scheme = 'https' if isinstance(self.connection, ssl.SSLSocket) else 'http'
+            scheme = 'https' if (getattr(self.server, 'ssl_context', None) or isinstance(self.connection, ssl.SSLSocket)) else 'http'
             allowed = {f'{scheme}://localhost:{self.server.server_port}', f'{scheme}://127.0.0.1:{self.server.server_port}', f'{scheme}://{self.headers.get("Host", "")}'}
             if self.headers.get('Origin') and self.headers['Origin'] not in allowed:
                 self.respond(403, b'{"error":"origin_rejected"}')
@@ -126,6 +141,10 @@ def server(bundle, variants, token, host='127.0.0.1', port=0, panel=None, ingest
                     from elo_content import decode
                     if size > 1024: raise ValueError('Terminal request too large')
                     self.respond(201, encoded(panel.terminals.add(decode(body))))
+                elif re.fullmatch(r'/manage/terminals/[0-9a-f]{16}/power', self.path) and method == 'POST':
+                    from elo_content import decode
+                    if size > 1024: raise ValueError('Comando muito grande')
+                    self.respond(202, encoded(panel.terminals.power(self.path.split('/')[3], decode(body))))
                 elif self.path.startswith('/manage/terminals/') and self.path.endswith('/revoke') and method == 'POST':
                     self.respond(200, encoded(panel.terminals.revoke(self.path.split('/')[3])))
                 elif self.path == '/manage/logout' and method == 'POST':
@@ -142,9 +161,14 @@ def server(bundle, variants, token, host='127.0.0.1', port=0, panel=None, ingest
                     self.respond(404, b'{"error":"not_found"}')
             except IngestError as error:
                 self.respond(error.status, encoded({'error': error.code}))
-            except (OSError, ValueError, UnicodeError):
+            except ValueError as error:
+                import traceback; traceback.print_exc()
+                self.respond(400, encoded({'error': str(error) if self.path.endswith('/power') else 'Operação recusada. Confira publicação, seleção e disponibilidade do Estúdio.'}))
+            except (OSError, UnicodeError):
+                import traceback; traceback.print_exc()
                 self.respond(400, encoded({'error': 'Operação recusada. Confira publicação, seleção e disponibilidade do Estúdio.'}))
             except Exception:
+                import traceback; traceback.print_exc()
                 self.respond(502, b'{"error":"editorial_service_unavailable"}')
 
         def ingest_request(self, method):
@@ -218,6 +242,24 @@ def server(bundle, variants, token, host='127.0.0.1', port=0, panel=None, ingest
                 self.respond(503, b'{"error":"intake_unavailable"}')
 
         def do_POST(self):
+            if self.path in ('/v1/control/poll', '/v1/control/ack'):
+                identity = self.terminal_identity()
+                if not panel or not identity or identity == 'local':
+                    self.respond(401, b'{"error":"unauthorized"}')
+                    return
+                try:
+                    from elo_content import decode
+                    size = int(self.headers.get('Content-Length', '0'))
+                    if self.headers.get('Transfer-Encoding') or not 1 <= size <= 1024:
+                        raise ValueError('Invalid control request size')
+                    data = self.rfile.read(size)
+                    if len(data) != size: raise ValueError('Incomplete control request')
+                    control = panel.terminals.control
+                    result = control.poll(identity, decode(data)) if self.path.endswith('/poll') else control.acknowledge(identity, decode(data))
+                    self.respond(200, encoded(result))
+                except (ValueError, OSError, UnicodeError):
+                    self.respond(400, b'{"error":"control_rejected"}')
+                return
             if self.path.startswith('/v1/ingest/'):
                 self.ingest_request('POST')
                 return
@@ -307,11 +349,10 @@ def server(bundle, variants, token, host='127.0.0.1', port=0, panel=None, ingest
 
     class Server(ThreadingHTTPServer):
         daemon_threads = True
+        ssl_context = None
 
-        def get_request(self):
-            connection, address = super().get_request()
-            connection.settimeout(10)
-            return connection, address
+        def handle_error(self, request, client_address):
+            pass
 
     instance = Server((host, port), Handler)
     instance.receipts = receipts
@@ -365,7 +406,7 @@ def main():
             context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
             context.minimum_version = ssl.TLSVersion.TLSv1_2
             context.load_cert_chain(args.cert, args.key)
-            service.socket = context.wrap_socket(service.socket, server_side=True)
+            service.ssl_context = context
         print(f'ELO_DISTRIBUTION {"http" if insecure else "https"} {service.server_port}', flush=True)
         try:
             service.serve_forever()

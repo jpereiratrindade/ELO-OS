@@ -9,6 +9,28 @@ export QT_QPA_FONTDIR=/usr/share/fonts/dejavu
 export XDG_RUNTIME_DIR=/run/elo-client
 mkdir -p "$XDG_RUNTIME_DIR"
 chmod 700 "$XDG_RUNTIME_DIR"
+# Camera is an explicit per-terminal choice; models are provisioned separately.
+models=/usr/share/elo-client/models
+if [ -s /etc/elo-terminal/camera.device ]; then
+    camera=$(cat /etc/elo-terminal/camera.device)
+    case "$camera" in
+        /dev/video[0-9]*)
+            if [ -s "$models/face_detection_yunet_2023mar.onnx" ]; then
+                modprobe uvcvideo || echo 'ELO: driver UVC indisponível; cliente tentará abrir câmera.' >&2
+                set -- --camera "$camera" --detector-model "$models/face_detection_yunet_2023mar.onnx" "$@"
+                if [ -s "$models/face_recognition_sface_2021dec_int8.onnx" ]; then
+                    mkdir -p /var/lib/elo-client/private
+                    chmod 700 /var/lib/elo-client/private
+                    set -- --recognizer-model "$models/face_recognition_sface_2021dec_int8.onnx" \
+                        --recognition-store /var/lib/elo-client/private/visits.json "$@"
+                fi
+            else
+                echo 'ELO: detector ausente; câmera desativada.' >&2
+            fi
+            ;;
+        *) echo 'ELO: dispositivo de câmera inválido; câmera desativada.' >&2 ;;
+    esac
+fi
 if [ -s /etc/elo-terminal/server.url ]; then
     exec /usr/bin/elo-terminal "$@"
 fi

@@ -89,7 +89,7 @@ def main():
             if subprocess.run(['openssl', 'x509', '-in', str(certificate), '-noout', option, name],
                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode:
                 raise ValueError('Certificate lacks requested name; use --renew-certificate')
-    for name in ('elo_server.py', 'elo_import.py', 'elo_content.py', 'elo_panel.py', 'elo_receipts.py', 'elo_terminals.py', 'elo_ingest.py', 'elo_consumable.py'):
+    for name in ('elo_server.py', 'elo_import.py', 'elo_content.py', 'elo_panel.py', 'elo_receipts.py', 'elo_terminals.py', 'elo_control.py', 'elo_telemetry.py', 'elo_ingest.py', 'elo_consumable.py'):
         shutil.copyfile(Path(__file__).parent / name, library / name)
     web = library / 'web'
     shutil.copytree(Path(__file__).resolve().parents[1] / 'web/distribution', web, dirs_exist_ok=True)
