@@ -350,6 +350,7 @@ def server(bundle, variants, token, host='127.0.0.1', port=0, panel=None, ingest
     class Server(ThreadingHTTPServer):
         daemon_threads = True
         ssl_context = None
+        request_queue_size = 64
 
         def handle_error(self, request, client_address):
             pass
