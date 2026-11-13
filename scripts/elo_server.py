@@ -85,10 +85,24 @@ def server(bundle, variants, token, host='127.0.0.1', port=0, panel=None, ingest
             self.send_header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self'; frame-ancestors 'none'; base-uri 'none'")
             self.send_header('Content-Length', str(len(body)))
             self.send_header('Cache-Control', 'no-store')
+            self.send_header('Connection', 'close')
             for name, value in extra_headers:
                 self.send_header(name, value)
             self.end_headers()
             self.wfile.write(body)
+            try:
+                self.wfile.flush()
+            except OSError:
+                pass
+            self.close_connection = True
+
+        def finish(self):
+            super().finish()
+            if isinstance(self.connection, ssl.SSLSocket):
+                try:
+                    self.connection.close()
+                except OSError:
+                    pass
 
         def authorized(self, credential):
             auth = self.headers.get_all('Authorization', [])
@@ -351,6 +365,14 @@ def server(bundle, variants, token, host='127.0.0.1', port=0, panel=None, ingest
         daemon_threads = True
         ssl_context = None
         request_queue_size = 64
+
+        def shutdown_request(self, request):
+            try:
+                if not getattr(self, 'ssl_context', None):
+                    request.shutdown(socket.SHUT_WR)
+            except (OSError, ValueError):
+                pass
+            self.close_request(request)
 
         def handle_error(self, request, client_address):
             pass
